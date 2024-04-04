@@ -24,13 +24,13 @@ def main(args = None):
     if args.forward_only:
         print("running variant scoring only for forward sequences")
     
-    out_dir = os.path.sep.join(args.out_prefix.split(os.path.sep)[:-1])
+    out_dir = os.path.sep.join(args.scoring_output_prefix.split(os.path.sep)[:-1])
     if not os.path.exists(out_dir):
         raise OSError(f"Output directory ({out_dir}) does not exist")
 
     # load the model and variants
     model = load_model_wrapper(args.model)
-    variants_table = load_variant_table(args.list, args.schema)
+    variants_table = load_variant_table(args.variant_list, args.schema)
     variants_table = variants_table.fillna('-')
     
     chrom_sizes = pd.read_csv(args.chrom_sizes, header=None, sep='\t', names=['chrom', 'size'])
@@ -266,11 +266,11 @@ def main(args = None):
     print("Output score table shape:", variants_table.shape)
     print()
 
-    variants_table.to_csv('.'.join([args.out_prefix, "variant_scores.tsv"]), sep="\t", index=False)
+    variants_table.to_csv('.'.join([args.scoring_output_prefix, "variant_scores.tsv"]), sep="\t", index=False)
 
     # store predictions at variants
     if not args.no_hdf5:
-        with h5py.File('.'.join([args.out_prefix, "variant_predictions.h5"]), 'w') as f:
+        with h5py.File('.'.join([args.scoring_output_prefix, "variant_predictions.h5"]), 'w') as f:
             observed = f.create_group('observed')
             observed.create_dataset('allele1_pred_counts', data=allele1_pred_counts, compression='gzip', compression_opts=9)
             observed.create_dataset('allele2_pred_counts', data=allele2_pred_counts, compression='gzip', compression_opts=9)

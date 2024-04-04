@@ -68,8 +68,8 @@ def main(args = None):
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(message)s')
 
-    variant_scores_file = args.list
-    output_prefix = args.out_prefix
+    variant_scores_file = args.variant_list
+    output_prefix = args.annotation_output_prefix
     peak_path = args.peaks
     tss_path = args.closest_genes
 

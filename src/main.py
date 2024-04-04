@@ -9,18 +9,14 @@ import variant_annotation
 
 def cli():
 	args = argmanager.fetch_main_parser()
-	if args.subcommand == "score":
+	if not args.no_scoring:
 		variant_scoring.main(args)
-	# elif args.subcommand == "score-per-chrom":
-	# 	variant_scoring_per_chrom.main(args)
-	# elif args.subcommand == "score-per-chunk":
-	# 	variant_scoring_per_chunk.main(args)
-	elif args.subcommand == "shap":
-		variant_shap.main(args)
-	elif args.subcommand == "summary":
+	if not args.no_summary:
 		variant_summary_across_folds.main(args)
-	elif args.subcommand == "annotate":
+	if not args.no_annotation:
 		variant_annotation.main(args)
+	if not args.no_shap:
+		variant_shap.main(args)
 
 
 if __name__ == "__main__":

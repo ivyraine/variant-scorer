@@ -8,16 +8,16 @@ from utils.helpers import *
 
 def main(args = None):
     if args is None:
-        args = fetch_variant_summary_args()
+        args = fetch_summary_args()
     print(args)
-    variant_score_dir = args.score_dir
+    variant_score_dir = args.scoring_output_prefix
     variant_table_list = args.score_list
-    output_prefix = args.out_prefix
+    output_prefix = args.summary_output_prefix
 
     score_dict = {}
     for i in range(len(variant_table_list)):
         variant_score_file = os.path.join(variant_score_dir, variant_table_list[i])
-        assert os.path.isfile(variant_score_file)
+        assert os.path.isfile(variant_score_file), f"Error: The file '{variant_score_file}' does not exist or is not a file."
         var_score = pd.read_table(variant_score_file)
         score_dict[i] = var_score
 
