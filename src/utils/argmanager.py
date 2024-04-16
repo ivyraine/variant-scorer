@@ -32,12 +32,13 @@ summary_args = {
     ("-suout", "--summary-output-dir",): { "type": str, "help": "Path prefix for storing the summary file with average scores across folds; directory should already exist" , "required": True},
     ("-sa", "--sample-name"): {"type": str, "help": "The prefix that will be prepended to the filename like: <output-dir>/<sample_name>.<index>.variant_scores.tsv", "required": True},
     ("-sc", "--schema",): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list"},
-    ("-sl", "--score-list"): { "nargs": '+', "help": "Names of variant score files that will be used to generate summary. Required if --no-scoring is used.", "required": True},
+    ("-sl", "--score-list"): { "nargs": '+', "help": "Names of variant score files that will be used to generate summary, and will be used like so: <scoring-output-dir>/<file> for each file in the list. Required if --no-scoring is used.", "required": True},
 }
 
 annotation_args = {
     ("-aout", "--annotation-output-prefix",): { "type": str, "help": "Path prefix for storing the annotated file; directory should already exist.", "required": True},
-    ("-l", "--variant-list",): { "type": str, "help": "a TSV file containing a list of variants to score.", "required": True},
+    ("-suout", "--summary-output-dir",): { "type": str, "help": "Path prefix for storing the summary file with average scores across folds; directory should already exist" , "required": True},
+    # ("-l", "--variant-list",): { "type": str, "help": "a TSV file containing a list of variants to score.", "required": True},
     ("-sc", "--schema",): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list"},
     ("-p", "--peaks"): { "type": str, "help": "Adds overlapping peaks information. Bed file containing peak regions."},
     ("-cg", "--closest-genes"): { "type": str, "help": "Adds closest gene annotations. Bed file containing gene regions. Default amount is 3." },
@@ -53,7 +54,7 @@ annotation_args = {
 shap_args = {
     ("-l", "--variant-list",): { "type": str, "help": "a TSV file containing a list of variants to score." , "required": True},
     ("-g", "--genome",): { "type": str, "help": "Genome fasta" , "required": True},
-    ("-m", "--model",): {"type": str, "help": "ChromBPNet model to use for variant scoring", "required": True},
+    ("-m", "--models",): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
     ("-shout", "--shap-output-prefix",): { "type": str, "help": "Path to storing snp effect score predictions from the script, directory should already exist", "required": True},
     ("-s", "--chrom-sizes",): {"type": str, "help": "Path to TSV file with chromosome sizes", "required": True},
     ("-sc", "--schema",): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list"},

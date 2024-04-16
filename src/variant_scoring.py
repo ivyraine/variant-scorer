@@ -267,12 +267,12 @@ def main(args = None):
         print("Output score table shape:", variants_table.shape)
         print()
 
-        scoring_output_prefix = f"{os.path.join(args.scoring_output_dir, args.sample_name)}.{index}"
-        variants_table.to_csv('.'.join([scoring_output_prefix, "variant_scores.tsv"]), sep="\t", index=False)
+        scoring_output_prefix = get_score_output_file_prefix(args.scoring_output_dir, args.sample_name, index)
+        variants_table.to_csv(f"{scoring_output_prefix}variant_scores.tsv", sep="\t", index=False)
 
         # store predictions at variants
         if not args.no_hdf5:
-            with h5py.File('.'.join([scoring_output_prefix, "variant_predictions.h5"]), 'w') as f:
+            with h5py.File(f"{scoring_output_prefix}variant_predictions.h5", 'w') as f:
                 observed = f.create_group('observed')
                 observed.create_dataset('allele1_pred_counts', data=allele1_pred_counts, compression='gzip', compression_opts=9)
                 observed.create_dataset('allele2_pred_counts', data=allele2_pred_counts, compression='gzip', compression_opts=9)
