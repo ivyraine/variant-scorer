@@ -24,7 +24,7 @@ def main(args = None):
     if args.forward_only:
         print("running variant scoring only for forward sequences")
     
-    out_dir = os.path.sep.join(args.out_prefix.split(os.path.sep)[:-1])
+    out_dir = os.path.sep.join(args.scoring_output_prefix.split(os.path.sep)[:-1])
     if not os.path.exists(out_dir):
         raise OSError(f"Output directory ({out_dir}) does not exist")
 
@@ -185,9 +185,9 @@ def main(args = None):
             shuf_abs_logfc_jsd = shuf_abs_logfc * shuf_jsd
 
     if not args.no_hdf5:
-        todo_chroms = [x for x in variants_table.chr.unique() if not os.path.exists('.'.join([args.out_prefix, str(x), "variant_predictions.h5"]))]
+        todo_chroms = [x for x in variants_table.chr.unique() if not os.path.exists('.'.join([args.scoring_output_prefix, str(x), "variant_predictions.h5"]))]
     else:
-        todo_chroms = [x for x in variants_table.chr.unique() if not os.path.exists('.'.join([args.out_prefix, str(x), "variant_scores.tsv"]))]
+        todo_chroms = [x for x in variants_table.chr.unique() if not os.path.exists('.'.join([args.scoring_output_prefix, str(x), "variant_scores.tsv"]))]
 
     for chrom in todo_chroms:
         print()
@@ -293,11 +293,11 @@ def main(args = None):
         print("Output " + str(chrom) + " score table shape:", chrom_variants_table.shape)
         print()
 
-        chrom_variants_table.to_csv('.'.join([args.out_prefix, chrom, "variant_scores.tsv"]), sep="\t", index=False)
+        chrom_variants_table.to_csv('.'.join([args.scoring_output_prefix, chrom, "variant_scores.tsv"]), sep="\t", index=False)
 
         # store predictions at variants
         if not args.no_hdf5:
-            with h5py.File('.'.join([args.out_prefix, chrom, "variant_predictions.h5"]), 'w') as f:
+            with h5py.File('.'.join([args.scoring_output_prefix, chrom, "variant_predictions.h5"]), 'w') as f:
                 observed = f.create_group('observed')
                 observed.create_dataset('allele1_pred_counts', data=allele1_pred_counts, compression='gzip', compression_opts=9)
                 observed.create_dataset('allele2_pred_counts', data=allele2_pred_counts, compression='gzip', compression_opts=9)

@@ -4,9 +4,10 @@ import argparse
 scoring_args = {
     ("-l", "--variant-list",): { "type": str, "help": "a TSV file containing a list of variants to score.", "required": True},
     ("-g", "--genome",): {"type": str, "help": "Genome fasta", "required": True},
-    ("-m", "--model",): {"type": str, "help": "ChromBPNet model to use for variant scoring", "required": True},
-    ("-scout", "--scoring-output-prefix",): {"type": str, "help": "Path to storing snp effect score predictions, and for summarizing. Directory should already exist.", "required": True},
+    ("-m", "--models",): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
+    ("-scout", "--scoring-output-dir",): {"type": str, "help": "The dir that will used for all output files like: <output-dir>/<sample_name>.<index>.variant_scores.tsv", "required": True},
     ("-s", "--chrom-sizes",): {"type": str, "help": "Path to TSV file with chromosome sizes", "required": True},
+    ("-sa", "--sample-name"): {"type": str, "help": "The prefix that will be prepended to the filename like: <output-dir>/<sample_name>.<index>.variant_scores.tsv", "required": True},
     ("-sc", "--schema",): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list"},
     ("-ps", "--peak-chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes for peak genome"},
     ("-pg", "--peak-genome",): {"type": str, "help": "Genome fasta for peaks"},
@@ -27,10 +28,11 @@ scoring_args = {
 }
 
 summary_args = {
-    ("-scout", "--scoring-output-prefix",): {"type": str, "help": "Path to storing snp effect score predictions, and for summarizing. Directory should already exist.", "required": True},
-    ("-suout", "--summary-output-prefix",): { "type": str, "help": "Path prefix for storing the summary file with average scores across folds; directory should already exist" , "required": True},
+    ("-scout", "--scoring-output-dir",): {"type": str, "help": "The dir that will used for all output files like: <output-dir>/<sample_name>.<index>.variant_scores.tsv", "required": True},
+    ("-suout", "--summary-output-dir",): { "type": str, "help": "Path prefix for storing the summary file with average scores across folds; directory should already exist" , "required": True},
+    ("-sa", "--sample-name"): {"type": str, "help": "The prefix that will be prepended to the filename like: <output-dir>/<sample_name>.<index>.variant_scores.tsv", "required": True},
     ("-sc", "--schema",): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list"},
-    ("-sl", "--score-list"): { "nargs": '+', "help": "Names of variant score files that will be used to generate summary. Required if --no-scoring is used."},
+    ("-sl", "--score-list"): { "nargs": '+', "help": "Names of variant score files that will be used to generate summary. Required if --no-scoring is used.", "required": True},
 }
 
 annotation_args = {
@@ -105,25 +107,29 @@ def fetch_main_parser():
     update_conditional_args(parser)
     conditional_args, _ = parser.parse_known_args()
 
-    parser = argparse.ArgumentParser()
     # Combine dictionaries of arguments for each subcommand.
     # We do this rather than argparse's argument_groups b.c.
     # there are some arguments that are shared between subcommands.
     args_dict = {}
+    included_modules = []
+    parser = argparse.ArgumentParser(add_help=True)
 
     if not conditional_args.no_scoring:
+        summary_args[("-sl", "--score-list")]["required"] = False
         args_dict.update(scoring_args)
-    else:
-        summary_args[("-sl", "--score_list")]["required"] = True
+        included_modules.append("scoring")
 
     if not conditional_args.no_summary:
         args_dict.update(summary_args)
+        included_modules.append("summary")
 
     if not conditional_args.no_annotation:
         args_dict.update(annotation_args)
+        included_modules.append("annotation")
 
     if not conditional_args.no_shap:
         args_dict.update(shap_args)
+        included_modules.append("shap")
 
     args_dict = {k: args_dict[k] for k in sorted(args_dict, key=lambda x: x[0])}
     for arg_names, kwargs in args_dict.items():
@@ -132,10 +138,8 @@ def fetch_main_parser():
     # Add conditional arguments back to the parser
     update_conditional_args(parser)
 
-    # Check if a subcommand has been provided; if not, print help and exit
-    if len(sys.argv) == 1:
-        parser.print_help(sys.stderr)
-        sys.exit(1)
+    included_modules_str = ", ".join(included_modules)
+    parser.description = f"This script (varscore) annotates genetic variants using chrombpnet and similar models. It can be run in multiple steps, each of which can be disabled using the --no-* flags. The steps are: scoring, summary, annotation, and shap. The following flags are shared between the following modules: {included_modules_str}."
 
     # Parse all args again
     args = parser.parse_args()

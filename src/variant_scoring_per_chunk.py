@@ -22,7 +22,7 @@ def main(args = None):
 
     np.random.seed(args.random_seed)
 
-    out_dir = os.path.sep.join(args.out_prefix.split(os.path.sep)[:-1])
+    out_dir = os.path.sep.join(args.scoring_output_prefix.split(os.path.sep)[:-1])
     if not os.path.exists(out_dir):
         raise OSError(f"Output directory ({out_dir}) does not exist")
 
@@ -162,7 +162,7 @@ def main(args = None):
             shuf_abs_logfc = np.squeeze(np.abs(shuf_logfc))
             shuf_abs_logfc_jsd = shuf_abs_logfc * shuf_jsd
 
-    todo_chunks = [x for x in range(args.num_chunks) if not os.path.exists('.'.join([args.out_prefix, str(x), "variant_predictions.h5"]))]
+    todo_chunks = [x for x in range(args.num_chunks) if not os.path.exists('.'.join([args.scoring_output_prefix, str(x), "variant_predictions.h5"]))]
     chunk_frac = (1 / args.num_chunks)
 
     for chunk in todo_chunks:
@@ -251,11 +251,11 @@ def main(args = None):
         print("Output " + str(chunk) + " score table shape:", chunk_variants_table.shape)
         print()
 
-        chunk_variants_table.to_csv('.'.join([args.out_prefix, str(chunk), "variant_scores.tsv"]), sep="\t", index=False)
+        chunk_variants_table.to_csv('.'.join([args.scoring_output_prefix, str(chunk), "variant_scores.tsv"]), sep="\t", index=False)
 
         # store predictions at variants
         if not args.no_hdf5:
-            with h5py.File('.'.join([args.out_prefix, str(chunk), "variant_predictions.h5"]), 'w') as f:
+            with h5py.File('.'.join([args.scoring_output_prefix, str(chunk), "variant_predictions.h5"]), 'w') as f:
                 observed = f.create_group('observed')
                 observed.create_dataset('allele1_pred_counts', data=allele1_pred_counts, compression='gzip', compression_opts=9)
                 observed.create_dataset('allele2_pred_counts', data=allele2_pred_counts, compression='gzip', compression_opts=9)
