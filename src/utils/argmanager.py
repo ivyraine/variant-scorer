@@ -38,6 +38,7 @@ summary_args = {
 
 annotation_args = {
     ("-suout", "--summary-output-dir",): { "type": str, "help": "The directory that will store the summary file with average scores across folds; directory should already exist." , "required": True},
+    ("-sa", "--sample-name"): {"type": str, "help": "The prefix that will be prepended to the filename like: <output-dir>/<sample_name>.<index>.variant_scores.tsv.", "required": True},
     ("-aout", "--annotation-output-dir",): { "type": str, "help": "The directory that will store the annotations file; directory should already exist.", "required": True},
     ("-sc", "--schema",): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
     ("-p", "--peaks"): { "type": str, "help": "Adds overlapping peaks information. Bed file containing peak regions."},

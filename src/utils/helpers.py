@@ -353,3 +353,6 @@ def get_score_output_file_prefix(scoring_output_dir, sample_name, model_index):
 
 def get_summary_output_file(summary_output_dir, sample_name):
     return f"{os.path.join(summary_output_dir, sample_name)}.mean.variant_scores.tsv"
+
+def get_annotation_output_file(annotation_output_dir, sample_name):
+    return f"{os.path.join(annotation_output_dir, sample_name)}.annotations.tsv"

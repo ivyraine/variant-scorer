@@ -57,7 +57,7 @@ def get_asb_adastra(chunk, sig_adastra_tf, sig_adastra_celltype):
 def main(args = None):
 
     if args is None:
-        args = fetch_variant_annotation_args()
+        args = fetch_annotation_args()
 
     if args.add_adastra:
         if not args.add_adastra_tf:
@@ -68,13 +68,12 @@ def main(args = None):
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(message)s')
 
-    variant_scores_file = args.variant_list
-    output_prefix = args.annotation_output_prefix
+    variant_scores_file = get_summary_output_file(args.summary_output_dir, args.sample_name)
     peak_path = args.peaks
     tss_path = args.closest_genes
 
     variant_scores = pd.read_table(variant_scores_file)
-    tmp_bed_file_path = output_prefix + ".variant_table.tmp.bed"
+    tmp_bed_file_path = f"/tmp/{args.sample_name}.variant_table.tmp.bed"
 
     if args.schema == "bed":
         if variant_scores['pos'].equals(variant_scores['end']):
@@ -96,7 +95,7 @@ def main(args = None):
 
         logging.info("Annotating with closest genes")
         closest_gene_count = args.closest_gene_count if args.closest_gene_count else DEFAULT_CLOSEST_GENE_COUNT
-        closest_gene_path = "%s.closest_genes.bed"%output_prefix
+        closest_gene_path = f"/tmp/{args.sample_name}.closest_genes.tmp.bed"
         gene_bedtools_intersect_cmd = f"bedtools closest -d -t first -k {closest_gene_count} -a {tmp_bed_file_path} -b {tss_path} > {closest_gene_path}"
         _ = subprocess.call(gene_bedtools_intersect_cmd,\
                             shell=True)
@@ -129,7 +128,7 @@ def main(args = None):
     if args.peaks:
 
         logging.info("Annotating with peak overlap")
-        peak_intersect_path = "%s.peak_overlap.bed"%output_prefix
+        peak_intersect_path = f"/tmp/{args.sample_name}.peak_overlap.tmp.bed"
         peak_bedtools_intersect_cmd = "bedtools intersect -wa -u -a %s -b %s > %s"%(tmp_bed_file_path, peak_path, peak_intersect_path)
         _ = subprocess.call(peak_bedtools_intersect_cmd,\
                             shell=True)
@@ -145,7 +144,7 @@ def main(args = None):
         logging.info("Annotating with r2")
         r2_ld_filepath = args.r2
 
-        r2_tsv_filepath = "/tmp/r2.tsv"
+        r2_tsv_filepath = f"/tmp/{args.sample_name}.r2.tsv"
         with open(r2_ld_filepath, 'r') as r2_ld_file, open(r2_tsv_filepath, mode='w') as r2_tsv_file:
             # temp=r2_tsv_file.name
             for line in r2_ld_file:
@@ -216,7 +215,7 @@ def main(args = None):
 
     logging.info(f"Final annotation table:\n{variant_scores.shape}\n{variant_scores.head()}")
 
-    out_file = output_prefix + ".annotations.tsv"
+    out_file = get_annotation_output_file(args.annotation_output_dir, args.sample_name)
     variant_scores.to_csv(out_file,\
                           sep="\t",\
                           index=False)
