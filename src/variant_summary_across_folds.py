@@ -11,10 +11,10 @@ def main(args = None):
     print(args)
 
     variant_scores_files = []
-    if hasattr(args, "models"):
+    if args.score_filenames is not None and 0 < len(args.score_filenames):
+        variant_scores_files = [ os.path.join(args.scoring_output_dir, args.score_filenames[i]) for i in range(len(args.score_filenames)) ]
+    elif hasattr(args, "models"):
         variant_scores_files = [ f"{get_score_output_file_prefix(args.scoring_output_dir, args.sample_name, index)}variant_scores.tsv" for index in range(len(args.models)) ]
-    elif 0 < len(args.score_list):
-        variant_scores_files = [ os.path.join(args.scoring_output_dir, args.score_list[i]) for i in range(len(args.score_list)) ]
     else:
         print("Error: No models or score list provided. Cannot perform summary. Exiting.")
         exit(1)

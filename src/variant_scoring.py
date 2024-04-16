@@ -23,8 +23,13 @@ def main(args = None):
     for model in args.models:
         if not os.path.isdir(args.scoring_output_dir):
             raise OSError(f"Output directory ({args.scoring_output_dir}) does not exist or is not a directory")
+    
+    if args.score_filenames is not None and len(args.score_filenames) != len(args.models):
+            raise ValueError("Number of models and score files do not match, which they are requird to do if the --score-list flag is given. Exiting.")
 
-    for index, model in enumerate(args.models):
+    scoring_output_prefixes = [ get_score_output_file_prefix(args.scoring_output_dir, args.sample_name, index) for index in range(len(args.models)) ]
+    model_and_output_prefixes = zip(args.models, scoring_output_prefixes)
+    for model, scoring_output_prefix in model_and_output_prefixes:
         np.random.seed(args.random_seed)
         if args.forward_only:
             print("running variant scoring only for forward sequences")
@@ -267,7 +272,6 @@ def main(args = None):
         print("Output score table shape:", variants_table.shape)
         print()
 
-        scoring_output_prefix = get_score_output_file_prefix(args.scoring_output_dir, args.sample_name, index)
         variants_table.to_csv(f"{scoring_output_prefix}variant_scores.tsv", sep="\t", index=False)
 
         # store predictions at variants

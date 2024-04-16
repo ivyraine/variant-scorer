@@ -25,6 +25,7 @@ scoring_args = {
     ("-nc", "--num-chunks"): {"type": int, "default": 10, "help": "Number of chunks to divide SNP file into"},
     ("-fo", "--forward-only"): {"action": "store_true", "help": "Run variant scoring only on forward sequence"},
     ("-st", "--shap-type"): {"nargs": '+', "default": ["counts"], "help": "Specify SHAP value type(s) to calculate"},
+    ("-sf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<file> for each file in the list. Generally only needed if --no-scoring is used."},
 }
 
 summary_args = {
@@ -32,7 +33,7 @@ summary_args = {
     ("-suout", "--summary-output-dir",): { "type": str, "help": "Path prefix for storing the summary file with average scores across folds; directory should already exist" , "required": True},
     ("-sa", "--sample-name"): {"type": str, "help": "The prefix that will be prepended to the filename like: <output-dir>/<sample_name>.<index>.variant_scores.tsv", "required": True},
     ("-sc", "--schema",): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list"},
-    ("-sl", "--score-list"): { "nargs": '+', "help": "Names of variant score files that will be used to generate summary, and will be used like so: <scoring-output-dir>/<file> for each file in the list. Required if --no-scoring is used.", "required": True},
+    ("-sf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<file> for each file in the list. Generally only needed if --no-scoring is used.", "required": True},
 }
 
 annotation_args = {
@@ -116,7 +117,7 @@ def fetch_main_parser():
     parser = argparse.ArgumentParser(add_help=True)
 
     if not conditional_args.no_scoring:
-        summary_args[("-sl", "--score-list")]["required"] = False
+        summary_args[("-sf", "--score-filenames")]["required"] = False
         args_dict.update(scoring_args)
         included_modules.append("scoring")
 
