@@ -8,6 +8,8 @@ from utils.helpers import *
 def main(args = None):
     if args is None:
         args = fetch_summary_args()
+        logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
+                            format='%(asctime)s - %(levelname)s - %(message)s')
     print(args)
 
     variant_scores_files = []

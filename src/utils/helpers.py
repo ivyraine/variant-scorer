@@ -356,3 +356,6 @@ def get_summary_output_file(summary_output_dir, sample_name):
 
 def get_annotation_output_file(annotation_output_dir, sample_name):
     return f"{os.path.join(annotation_output_dir, sample_name)}.annotations.tsv"
+
+def get_filter_output_file(annotation_output_dir, sample_name):
+    return f"{os.path.join(annotation_output_dir, sample_name)}.annotations.filtered.tsv"

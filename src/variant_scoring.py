@@ -13,12 +13,14 @@ from generators.variant_generator import VariantGenerator
 from generators.peak_generator import PeakGenerator
 from utils import argmanager, losses
 from utils.helpers import *
+import logging
 
 
 def main(args = None):
     if args is None:
         args = argmanager.fetch_scoring_args()
-    print(args)
+        logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
+                            format='%(asctime)s - %(levelname)s - %(message)s')
 
     for model in args.models:
         if not os.path.isdir(args.scoring_output_dir):

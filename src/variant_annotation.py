@@ -57,6 +57,9 @@ def get_asb_adastra(chunk, sig_adastra_tf, sig_adastra_celltype):
 def main(args = None):
 
     if args is None:
+        logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
+                            format='%(asctime)s - %(levelname)s - %(message)s')
+
         args = fetch_annotation_args()
 
     if args.add_adastra:
@@ -64,9 +67,6 @@ def main(args = None):
             raise ValueError("ADASTRA TF file (-aatf) is required for ADASTRA annotation")    
         if not args.add_adastra_celltype:
             raise ValueError("ADASTRA celltype file (-aact) is required for ADASTRA annotation")
-
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
-                        format='%(asctime)s - %(levelname)s - %(message)s')
 
     variant_scores_file = get_summary_output_file(args.summary_output_dir, args.sample_name)
     peak_path = args.peaks
@@ -129,7 +129,9 @@ def main(args = None):
 
         logging.info("Annotating with peak overlap")
         peak_intersect_path = f"/tmp/{args.sample_name}.peak_overlap.tmp.bed"
+        print(peak_intersect_path)
         peak_bedtools_intersect_cmd = "bedtools intersect -wa -u -a %s -b %s > %s"%(tmp_bed_file_path, peak_path, peak_intersect_path)
+        print(peak_bedtools_intersect_cmd)
         _ = subprocess.call(peak_bedtools_intersect_cmd,\
                             shell=True)
 
@@ -220,7 +222,7 @@ def main(args = None):
                           sep="\t",\
                           index=False)
 
-    logging.info(f"Completed! Annotations written to: {out_file}")
+    logging.info(f"Annotation step completed! Output written to: {out_file}")
 
 
 if __name__ == "__main__":

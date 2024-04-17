@@ -14,6 +14,7 @@ from generators.peak_generator import PeakGenerator
 from utils import argmanager, losses
 from utils.helpers import *
 import shap
+import logging
 from utils.shap_utils import *
 import deepdish as dd
 tf.compat.v1.disable_v2_behavior()
@@ -22,17 +23,15 @@ tf.compat.v1.disable_v2_behavior()
 def main(args = None):
     if args is None:
         args = argmanager.fetch_shap_args()
-    print(args)
+        logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
+                            format='%(asctime)s - %(levelname)s - %(message)s')
 
-    out_dir = os.path.sep.join(args.shap_output_prefix.split(os.path.sep)[:-1])
-    print()
-    print('out_dir:', out_dir)
-    print()
-    if not os.path.exists(out_dir):
-        raise OSError(f"Output directory ({out_dir}) does not exist")
+    if not os.path.isdir(args.shap_output_dir):
+        raise OSError(f"Output directory ({args.shap_output_dir}) does not exist")
 
     model = load_model_wrapper(args.model)
-    variants_table = load_variant_table(args.variant_list, args.schema)
+    annotations_file = get_annotation_output_file(args.annotation_output_dir, args.sample_name)
+    variants_table = load_variant_table(annotations_file, args.schema)
     variants_table = variants_table.fillna('-')
 
     chrom_sizes = pd.read_csv(args.chrom_sizes, header=None, sep='\t', names=['chrom', 'size'])
@@ -59,7 +58,7 @@ def main(args = None):
         batch_size=args.batch_size
         ### set the batch size to the length of variant table in case variant table is small to avoid error
         batch_size=min(batch_size,len(variants_table))
-        # output_file=h5py.File(''.join([args.shap_output_prefix, ".variant_shap.%s.h5"%shap_type]), 'w')
+        # output_file=h5py.File(''.join([args.shap_output_dir, ".variant_shap.%s.h5"%shap_type]), 'w')
         # observed = output_file.create_group('observed')
         # allele1_write = observed.create_dataset('allele1_shap', (len(variants_table),2114,4), chunks=(batch_size,2114,4), dtype=np.float16, compression='gzip', compression_opts=9)
         # allele2_write = observed.create_dataset('allele2_shap', (len(variants_table),2114,4), chunks=(batch_size,2114,4), dtype=np.float16, compression='gzip', compression_opts=9)
@@ -135,7 +134,7 @@ def main(args = None):
                 variant_ids = np.concatenate((variant_ids, var_ids))
 
         # # store shap at variants
-        # with h5py.File(''.join([args.shap_output_prefix, ".variant_shap.%s.h5"%shap_type]), 'w') as f:
+        # with h5py.File(''.join([args.shap_output_dir, ".variant_shap.%s.h5"%shap_type]), 'w') as f:
         #     observed = f.create_group('observed')
         #     observed.create_dataset('allele1_shap', data=allele1_shap, compression='gzip', compression_opts=9)
         #     observed.create_dataset('allele2_shap', data=allele2_shap, compression='gzip', compression_opts=9)
@@ -158,7 +157,7 @@ def main(args = None):
             'alleles': np.concatenate((np.array([0] * len(variant_ids)),
                                        np.array([1] * len(variant_ids))))}
 
-        dd.io.save(''.join([args.shap_output_prefix, ".variant_shap.%s.h5"%shap_type]),
+        dd.io.save(''.join([args.shap_output_dir, ".variant_shap.%s.h5"%shap_type]),
                    shap_dict,
                    compression='blosc')
 
