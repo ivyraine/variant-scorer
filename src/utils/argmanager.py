@@ -24,8 +24,8 @@ scoring_args = {
     ("--no-hdf5",): {"action": "store_true", "help": "Do not save detailed predictions in hdf5 file."},
     ("-nc", "--num-chunks"): {"type": int, "default": 10, "help": "Number of chunks to divide SNP file into."},
     ("-fo", "--forward-only"): {"action": "store_true", "help": "Run variant scoring only on forward sequence."},
-    ("-st", "--shap-type"): {"nargs": '+', "default": ["counts"], "help": "Specify SHAP value type(s) to calculate."},
-    ("-sf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<file> for each file in the list. Generally only needed if --no-scoring is used."},
+    ("-st", "--shap-type"): {"nargs": '+', "default": ["counts"], "help": "Specify shap value type(s) to calculate."},
+    ("-scf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 }
 
@@ -34,7 +34,7 @@ summary_args = {
     ("-suout", "--summary-output-dir"): { "type": str, "help": "The directory to store the summary file with average scores across folds; directory should already exist." , "required": True},
     ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename, like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
     ("-sc", "--schema"): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
-    ("-sf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files to be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<file> for each file in the list. Generally only needed if --no-scoring is used.", "required": True},
+    ("-scf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files to be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used.", "required": True},
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 }
 
@@ -68,20 +68,26 @@ filter_args = {
 }
 
 shap_args = {
-    ("-aout", "--annotation-output-dir"): { "type": str, "help": "The directory to store the annotations file like so: <annotation-output-dir>/<sample-name>.annotations.tsv. This directory should already exist.", "required": True},
+    # ("-aout", "--annotation-output-dir"): { "type": str, "help": "The directory to store the annotations file like so: <annotation-output-dir>/<sample-name>.annotations.tsv. This directory should already exist.", "required": True},
+    ("-fout", "--filter-output-dir"): {"type": str, "help": "The directory to store the filtered annotations file like so: <filter-output-dir>/<sample-name>.annotations.filtered.tsv. This directory should already exist.", "required": True},
     ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
-    ("-t", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<file> for each file in the list. Generally only needed if --no-scoring is used."},
+    # ("-t", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<file> for each file in the list. Generally only needed if --no-scoring is used."},
     ("-shout", "--shap-output-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script, directory should already exist.", "required": True},
     ("-g", "--genome"): { "type": str, "help": "Genome fasta." , "required": True},
     ("-m", "--models"): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
     ("-s", "--chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes.", "required": True},
-    ("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
+    # ("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
     ("-li", "--lite"): { "action": "store_true", "help": "Models were trained with chrombpnet-lite."},
     ("-dm", "--debug-mode"): { "action": "store_true", "help": "Display allele input sequences."},
     ("-bs", "--batch-size"): { "type": int, "default": 10000, "help": "Batch size to use for the model."},
     ("-c", "--chrom"): { "type": str, "help": "Only score SNPs in selected chromosome."},
-    ("-st", "--shap-type"): { "nargs": '+', "default": ["counts"], "help": "Specify SHAP value type(s) to calculate." },
+    ("-shf", "--shap-filenames"): { "nargs": '+', "help": "A list of file names of shap files to be used to overwrite the otherwise generated index filenames, and will be used like so: <shap-output-dir>/<shap-filename>.{h5,bw} for each file in the list."},
+    ("-st", "--shap-type"): { "nargs": '+', "default": ["counts"], "help": "Specify shap value type(s) to calculate." },
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
+}
+
+viz_args = {
+    ("-shout", "--shap-output-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script, directory should already exist.", "required": True},
 }
 
 def update_conditional_args(parser):
@@ -90,6 +96,7 @@ def update_conditional_args(parser):
     parser.add_argument("--no-annotation", action='store_true', help="Exclude the annotation step of the pipeline")
     parser.add_argument("--no-filter", action='store_true', help="Exclude the filter step of the pipeline")
     parser.add_argument("--no-shap", action='store_true', help="Exclude the shap step of the pipeline")
+    parser.add_argument("--no-viz", action='store_true', help="Exclude the visualization step of the pipeline")
 
 def fetch_scoring_args():
     parser = argparse.ArgumentParser()
@@ -131,6 +138,14 @@ def fetch_shap_args():
     args = parser.parse_args()
     return args
 
+def fetch_viz_args():
+    parser = argparse.ArgumentParser()
+    args_dict = {k: args_dict[k] for k in sorted(viz_args, key=lambda x: x[0])}
+    for arg_names, kwargs in args_dict.items():
+        parser.add_argument(*arg_names, **kwargs)
+    args = parser.parse_args()
+    return args
+
 def fetch_main_parser():
     parser = argparse.ArgumentParser(add_help=False)
     update_conditional_args(parser)
@@ -144,7 +159,7 @@ def fetch_main_parser():
     parser = argparse.ArgumentParser(add_help=True)
 
     if not conditional_args.no_scoring:
-        summary_args[("-sf", "--score-filenames")]["required"] = False
+        summary_args[("-scf", "--score-filenames")]["required"] = False
         args_dict.update(scoring_args)
         included_modules.append("scoring")
 
@@ -163,6 +178,10 @@ def fetch_main_parser():
     if not conditional_args.no_shap:
         args_dict.update(shap_args)
         included_modules.append("shap")
+
+    if not conditional_args.no_viz:
+        args_dict.update(viz_args)
+        included_modules.append("viz")
 
     args_dict = {k: args_dict[k] for k in sorted(args_dict, key=lambda x: x[0])}
     for arg_names, kwargs in args_dict.items():

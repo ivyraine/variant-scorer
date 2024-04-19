@@ -15,6 +15,7 @@ sys.path.append('..')
 from generators.variant_generator import VariantGenerator
 from generators.peak_generator import PeakGenerator
 from utils import argmanager, losses
+import logging
 
 
 def get_variant_schema(schema):
@@ -43,6 +44,7 @@ def get_valid_peaks(chrom, pos, summit, input_len, chrom_sizes_dict):
 
 def get_valid_variants(chrom, pos, allele1, allele2, input_len, chrom_sizes_dict):
     valid_chrom = chrom in chrom_sizes_dict
+    # logging.debug(f"chrom: {chrom}, pos: {pos}, valid_chrom: {valid_chrom}")
     if valid_chrom:
         flank = input_len // 2
         lower_check = (pos - flank > 0)
@@ -52,6 +54,7 @@ def get_valid_variants(chrom, pos, allele1, allele2, input_len, chrom_sizes_dict
         # no_allele2_indel = (len(allele2) == 1)
         # no_indel = no_allele1_indel and no_allele2_indel
         # valid_variant = valid_chrom and in_bounds and no_indel
+        # logging.debug(f"chr: {chrom}, pos: {pos}, valid_chrom: {valid_chrom}, in_bounds: {in_bounds}")
         valid_variant = valid_chrom and in_bounds
         return valid_variant
     else:
@@ -66,7 +69,7 @@ def load_model_wrapper(model_file):
     custom_objects = {"multinomial_nll": losses.multinomial_nll, "tf": tf}
     get_custom_objects().update(custom_objects)
     model = load_model(model_file, compile=False)
-    print("model loaded succesfully")
+    logging.debug(f"Model {model_file} loaded successfully.")
     return model
 
 def fetch_peak_predictions(model, peaks, input_len, genome_fasta, batch_size, debug_mode=False, lite=False,forward_only=False):
@@ -290,8 +293,12 @@ def adjust_indel_jsd(variants_table,allele1_pred_profiles,allele2_pred_profiles,
     return indel_idx, adjusted_jsd_list
 
 
-def load_variant_table(table_path, schema):
-    variants_table = pd.read_csv(table_path, header=None, sep='\t', names=get_variant_schema(schema))
+def load_variant_table(table_path, schema=None):
+    variants_table = None
+    if schema is not None:
+        variants_table = pd.read_csv(table_path, header=None, sep='\t', names=get_variant_schema(schema))
+    else:
+        variants_table = pd.read_table(table_path, header=0, sep='\t')
     variants_table.drop(columns=[str(x) for x in variants_table.columns if str(x).startswith('ignore')], inplace=True)
     variants_table['chr'] = variants_table['chr'].astype(str)
     has_chr_prefix = any('chr' in x.lower() for x in variants_table['chr'].tolist())
@@ -349,7 +356,7 @@ def geo_mean_overflow(iterable,axis=0):
     return np.exp(np.log(iterable).mean(axis=0))
 
 def get_score_output_file_prefix(scoring_output_dir, sample_name, model_index):
-    return f"{os.path.join(scoring_output_dir, sample_name)}.{model_index}."
+    return f"{os.path.join(scoring_output_dir, sample_name)}.{model_index}"
 
 def get_summary_output_file(summary_output_dir, sample_name):
     return f"{os.path.join(summary_output_dir, sample_name)}.mean.variant_scores.tsv"
@@ -359,3 +366,6 @@ def get_annotation_output_file(annotation_output_dir, sample_name):
 
 def get_filter_output_file(annotation_output_dir, sample_name):
     return f"{os.path.join(annotation_output_dir, sample_name)}.annotations.filtered.tsv"
+
+def get_shap_output_file_prefix(shap_output_dir, sample_name, model_index):
+    return f"{os.path.join(shap_output_dir, sample_name)}.{model_index}"

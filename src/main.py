@@ -6,6 +6,7 @@ import variant_shap
 import variant_summary_across_folds
 import variant_annotation
 import variant_filter
+import variant_viz
 import os
 import sys
 import logging
@@ -42,6 +43,10 @@ def cli():
 		if not os.path.isdir(args.shap_output_dir):
 			print(f"Error: The --shap-output-dir directory '{args.shap_output_dir}' does not exist.")
 			exit(1)
+	# if not args.no_viz:
+	# 	if not os.path.isdir(args.viz_output_dir):
+	# 		print(f"Error: The --visualization-output-dir directory '{args.viz_output_dir}' does not exist.")
+	# 		exit(1)
 
 	if not args.no_scoring:
 		variant_scoring.main(args)
@@ -53,6 +58,8 @@ def cli():
 		variant_filter.main(args)
 	if not args.no_shap:
 		variant_shap.main(args)
+	# if not args.no_viz:
+	# 	variant_viz.main(args)
 
 
 if __name__ == "__main__":

@@ -22,22 +22,26 @@ def main(args = None):
         logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                             format='%(asctime)s - %(levelname)s - %(message)s')
 
-    for model in args.models:
-        if not os.path.isdir(args.scoring_output_dir):
-            raise OSError(f"Output directory ({args.scoring_output_dir}) does not exist or is not a directory")
-    
-    if args.score_filenames is not None and len(args.score_filenames) != len(args.models):
-            raise ValueError("Number of models and score files do not match, which they are requird to do if the --score-list flag is given. Exiting.")
+    if not os.path.isdir(args.scoring_output_dir):
+        raise OSError(f"Output directory ({args.scoring_output_dir}) does not exist or is not a directory")
 
+    is_using_file_overrides = False
     scoring_output_prefixes = [ get_score_output_file_prefix(args.scoring_output_dir, args.sample_name, index) for index in range(len(args.models)) ]
-    model_and_output_prefixes = zip(args.models, scoring_output_prefixes)
-    for model, scoring_output_prefix in model_and_output_prefixes:
+    if args.score_filenames is not None:
+        if len(args.score_filenames) != len(args.models):
+            raise ValueError("Number of models and score filenames do not match, which they are requird to do if the --score-filenames flag is given. Exiting.")
+        else:
+            scoring_output_prefixes = [ os.path.join(args.scoring_output_dir, args.score_filenames[i]) for i in range(len(args.models)) ]
+            is_using_file_overrides = True
+
+    model_and_output_prefixes = list(zip(args.models, scoring_output_prefixes))
+    for model_index, (model_name, scoring_output_prefix) in enumerate(model_and_output_prefixes):
         np.random.seed(args.random_seed)
         if args.forward_only:
             print("running variant scoring only for forward sequences")
 
         # load the model and variants
-        model = load_model_wrapper(model)
+        model = load_model_wrapper(model_name)
         variants_table = load_variant_table(args.variant_list, args.schema)
         variants_table = variants_table.fillna('-')
         
@@ -269,16 +273,19 @@ def main(args = None):
         if args.schema == "bed":
             variants_table['pos'] = variants_table['pos'] - 1
 
-        print()
-        print(variants_table.head())
-        print("Output score table shape:", variants_table.shape)
-        print()
+        logging.info(f"Output score table:\n{variants_table.head()}\n{variants_table.shape}")
 
-        variants_table.to_csv(f"{scoring_output_prefix}variant_scores.tsv", sep="\t", index=False)
+        output_tsv = f"{scoring_output_prefix}.variant_scores.tsv"
+        if is_using_file_overrides:
+            output_tsv = f"{scoring_output_prefix}.tsv"
+        variants_table.to_csv(output_tsv, sep="\t", index=False)
 
         # store predictions at variants
         if not args.no_hdf5:
-            with h5py.File(f"{scoring_output_prefix}variant_predictions.h5", 'w') as f:
+            output_h5 = f"{scoring_output_prefix}.variant_predictions.h5"
+            if is_using_file_overrides:
+                output_h5 = f"{scoring_output_prefix}.h5"
+            with h5py.File(output_h5, 'w') as f:
                 observed = f.create_group('observed')
                 observed.create_dataset('allele1_pred_counts', data=allele1_pred_counts, compression='gzip', compression_opts=9)
                 observed.create_dataset('allele2_pred_counts', data=allele2_pred_counts, compression='gzip', compression_opts=9)
@@ -302,9 +309,10 @@ def main(args = None):
                         shuffled.create_dataset('shuf_jsd_max_percentile', data=shuf_jsd_max_percentile, compression='gzip', compression_opts=9)
                         shuffled.create_dataset('shuf_logfc_x_jsd_x_max_percentile', data=shuf_logfc_jsd_max_percentile, compression='gzip', compression_opts=9)
                         shuffled.create_dataset('shuf_abs_logfc_x_jsd_x_max_percentile', data=shuf_abs_logfc_jsd_max_percentile, compression='gzip', compression_opts=9)
+            logging.info(f"Finished scoring for {model_name} ({model_index+1}/{len(model_and_output_prefixes)}) and saved to {output_tsv} and {output_h5}")
+        else:
+            logging.info(f"Finished scoring for {model_name} ({model_index+1}/{len(model_and_output_prefixes)}) and saved to {output_tsv}")
 
-        print("DONE")
-        print()
 
 
 if __name__ == "__main__":

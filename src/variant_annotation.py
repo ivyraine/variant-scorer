@@ -22,8 +22,6 @@ def get_asb_adastra(chunk, sig_adastra_tf, sig_adastra_celltype):
     asb_celltypes = []
 
     for index,row in chunk.iterrows():
-        if index % 1000 == 0:
-            print(index)
 
         local_tf_df = sig_adastra_tf.loc[sig_adastra_tf['variant_id'] == row['variant_id']].copy()
         if len(local_tf_df) > 0:
@@ -129,9 +127,7 @@ def main(args = None):
 
         logging.info("Annotating with peak overlap")
         peak_intersect_path = f"/tmp/{args.sample_name}.peak_overlap.tmp.bed"
-        print(peak_intersect_path)
         peak_bedtools_intersect_cmd = "bedtools intersect -wa -u -a %s -b %s > %s"%(tmp_bed_file_path, peak_path, peak_intersect_path)
-        print(peak_bedtools_intersect_cmd)
         _ = subprocess.call(peak_bedtools_intersect_cmd,\
                             shell=True)
 
