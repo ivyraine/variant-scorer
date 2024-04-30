@@ -355,8 +355,11 @@ def get_pvals(obs, bg, tail):
 def geo_mean_overflow(iterable,axis=0):
     return np.exp(np.log(iterable).mean(axis=0))
 
-def get_score_output_file_prefix(scoring_output_dir, sample_name, model_index):
-    return f"{os.path.join(scoring_output_dir, sample_name)}.{model_index}"
+def get_score_output_file_prefix(scoring_output_dir, sample_name, model_index, is_filter_step=False):
+    res = f"{os.path.join(scoring_output_dir, sample_name)}.{model_index}"
+    if is_filter_step:
+        res += ".filtered"
+    return res
 
 def get_summary_output_file(summary_output_dir, sample_name):
     return f"{os.path.join(summary_output_dir, sample_name)}.mean.variant_scores.tsv"

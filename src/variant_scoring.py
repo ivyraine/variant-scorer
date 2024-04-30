@@ -16,25 +16,39 @@ from utils.helpers import *
 import logging
 
 
-def main(args = None):
+def main(args = None, filter_output_dir_override = None, filtered_variants_df_override = None):
     if args is None:
         args = argmanager.fetch_scoring_args()
         logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                             format='%(asctime)s - %(levelname)s - %(message)s')
 
-    if not os.path.isdir(args.scoring_output_dir):
-        raise OSError(f"Output directory ({args.scoring_output_dir}) does not exist or is not a directory")
+    output_dir = None
+    if filter_output_dir_override is not None:
+        output_dir = filter_output_dir_override
+    elif not os.path.isdir(args.scoring_output_dir):
+        raise OSError(f"Output directory ({output_dir}) does not exist or is not a directory")
+    else:
+        output_dir = args.scoring_output_dir
 
-    is_using_file_overrides = False
-    scoring_output_prefixes = [ get_score_output_file_prefix(args.scoring_output_dir, args.sample_name, index) for index in range(len(args.models)) ]
+    is_using_result_filename_overrides = False
+    is_filter_step = filter_output_dir_override is not None
+    scoring_output_prefixes = [ get_score_output_file_prefix(output_dir, args.sample_name, index, is_filter_step=is_filter_step) for index in range(len(args.models)) ]
     if args.score_filenames is not None:
         if len(args.score_filenames) != len(args.models):
             raise ValueError("Number of models and score filenames do not match, which they are requird to do if the --score-filenames flag is given. Exiting.")
         else:
-            scoring_output_prefixes = [ os.path.join(args.scoring_output_dir, args.score_filenames[i]) for i in range(len(args.models)) ]
-            is_using_file_overrides = True
+            scoring_output_prefixes = [ os.path.join(output_dir, args.score_filenames[i]) for i in range(len(args.models)) ]
+            is_using_result_filename_overrides = True
 
     model_and_output_prefixes = list(zip(args.models, scoring_output_prefixes))
+
+    variants_table = None
+    if filtered_variants_df_override is not None:
+        variants_table = filtered_variants_df_override
+    else:
+        variants_table = load_variant_table(args.variant_list, args.schema)
+        variants_table = variants_table.fillna('-')
+
     for model_index, (model_name, scoring_output_prefix) in enumerate(model_and_output_prefixes):
         np.random.seed(args.random_seed)
         if args.forward_only:
@@ -42,8 +56,6 @@ def main(args = None):
 
         # load the model and variants
         model = load_model_wrapper(model_name)
-        variants_table = load_variant_table(args.variant_list, args.schema)
-        variants_table = variants_table.fillna('-')
         
         chrom_sizes = pd.read_csv(args.chrom_sizes, header=None, sep='\t', names=['chrom', 'size'])
         chrom_sizes_dict = chrom_sizes.set_index('chrom')['size'].to_dict()
@@ -275,15 +287,16 @@ def main(args = None):
 
         logging.info(f"Output score table:\n{variants_table.head()}\n{variants_table.shape}")
 
-        output_tsv = f"{scoring_output_prefix}.variant_scores.tsv"
-        if is_using_file_overrides:
-            output_tsv = f"{scoring_output_prefix}.tsv"
-        variants_table.to_csv(output_tsv, sep="\t", index=False)
+        if filter_output_dir_override is not None:
+            output_tsv = f"{scoring_output_prefix}.variant_scores.tsv"
+            if is_using_result_filename_overrides:
+                output_tsv = f"{scoring_output_prefix}.tsv"
+            variants_table.to_csv(output_tsv, sep="\t", index=False)
 
         # store predictions at variants
-        if not args.no_hdf5:
+        if hasattr(args, "no_hdf5") and not args.no_hdf5 or filter_output_dir_override is not None:
             output_h5 = f"{scoring_output_prefix}.variant_predictions.h5"
-            if is_using_file_overrides:
+            if is_using_result_filename_overrides:
                 output_h5 = f"{scoring_output_prefix}.h5"
             with h5py.File(output_h5, 'w') as f:
                 observed = f.create_group('observed')
@@ -312,7 +325,6 @@ def main(args = None):
             logging.info(f"Finished scoring for {model_name} ({model_index+1}/{len(model_and_output_prefixes)}) and saved to {output_tsv} and {output_h5}")
         else:
             logging.info(f"Finished scoring for {model_name} ({model_index+1}/{len(model_and_output_prefixes)}) and saved to {output_tsv}")
-
 
 
 if __name__ == "__main__":

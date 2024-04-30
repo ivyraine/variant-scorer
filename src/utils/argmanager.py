@@ -21,7 +21,7 @@ scoring_args = {
     ("-mp", "--max-peaks"): {"type": int, "help": "Maximum number of peaks to use for peak percentile calculation."},
     ("-c", "--chrom"): {"type": str, "help": "Only score SNPs in selected chromosome."},
     ("-r", "--random-seed"): {"type": int, "default": 1234, "help": "Random seed for reproducibility when sampling."},
-    ("--no-hdf5",): {"action": "store_true", "help": "Do not save detailed predictions in hdf5 file."},
+    ("--no-hdf5",): {"action": "store_true", "help": "Prevents saving detailed predictions in hdf5 file during storing, and using those files during the shap and viz steps. Recommended when the variants list is large (>1,000,000)."},
     ("-nc", "--num-chunks"): {"type": int, "default": 10, "help": "Number of chunks to divide SNP file into."},
     ("-fo", "--forward-only"): {"action": "store_true", "help": "Run variant scoring only on forward sequence."},
     ("-st", "--shap-type"): {"nargs": '+', "default": ["counts"], "help": "Specify shap value type(s) to calculate."},
@@ -72,7 +72,7 @@ shap_args = {
     ("-fout", "--filter-output-dir"): {"type": str, "help": "The directory to store the filtered annotations file like so: <filter-output-dir>/<sample-name>.annotations.filtered.tsv. This directory should already exist.", "required": True},
     ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
     # ("-t", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<file> for each file in the list. Generally only needed if --no-scoring is used."},
-    ("-shout", "--shap-output-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script, directory should already exist.", "required": True},
+    ("-shout", "--shap-output-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script. This directory should already exist.", "required": True},
     ("-g", "--genome"): { "type": str, "help": "Genome fasta." , "required": True},
     ("-m", "--models"): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
     ("-s", "--chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes.", "required": True},
@@ -83,11 +83,23 @@ shap_args = {
     ("-c", "--chrom"): { "type": str, "help": "Only score SNPs in selected chromosome."},
     ("-shf", "--shap-filenames"): { "nargs": '+', "help": "A list of file names of shap files to be used to overwrite the otherwise generated index filenames, and will be used like so: <shap-output-dir>/<shap-filename>.{h5,bw} for each file in the list."},
     ("-st", "--shap-type"): { "nargs": '+', "default": ["counts"], "help": "Specify shap value type(s) to calculate." },
+    ("--no-hdf5",): {"action": "store_true", "help": "Prevents saving detailed predictions in hdf5 file during storing, and using those files during the shap and viz steps. Recommended when the variants list is large (>1,000,000)."},
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 }
 
 viz_args = {
-    ("-shout", "--shap-output-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script, directory should already exist.", "required": True},
+    ("-m", "--models"): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
+    ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
+    ("-shout", "--shap-output-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script. This directory should already exist.", "required": True},
+    ("-scout", "--scoring-output-dir"): {"type": str, "help": "The directory to store all output files like: <output-dir>/<sample-name>.<index>.variant_scores.tsv; directory should already exist.", "required": True},
+    ("-vout", "--viz-output-dir"): {"type": str, "help": "The directory that will store the visualization outputs. This directory should already exist.", "required": True},
+    ("-scf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
+    # ("--no-hdf5",): {"action": "store_true", "help": "Prevents saving detailed predictions in hdf5 file during storing, and using those files during the shap and viz steps. Recommended when the variants list is large (>1,000,000)."},
+    ("-st", "--shap-type"): { "nargs": '+', "default": ["counts"], "help": "Specify shap value type(s) to calculate." },
+    ("-predo", "--predictions-override"): { "type": str, "help": "The name of the variant effect predictions' file. Use this if you want to use a name other than the default."},
+    ("-shapo", "--shap-override"): { "type": str, "help": "The name of the shap output file. Use this if you want to use a name other than the default."},
+    # TODO: Allow users to provide hdf5 files directly
+    ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 }
 
 def update_conditional_args(parser):
@@ -174,6 +186,11 @@ def fetch_main_parser():
     if not conditional_args.no_filter:
         args_dict.update(filter_args)
         included_modules.append("filter")
+        # Also include (a copy of) scoring args here (but without the required scoring output dir), as it'll be re-run for the filter step.
+        scoring_args_copy = scoring_args.copy()
+        scoring_args_copy.pop(("-scout", "--scoring-output-dir"))
+        scoring_args_copy.pop(("--no-hdf5",))
+        args_dict.update(scoring_args_copy)
 
     if not conditional_args.no_shap:
         args_dict.update(shap_args)

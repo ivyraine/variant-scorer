@@ -4,6 +4,7 @@ import os
 from collections import namedtuple
 import operator
 import logging
+import variant_scoring
 
 from utils.argmanager import *
 from utils.helpers import *
@@ -55,8 +56,6 @@ def main(args = None):
         else:
             filter_mask &= df["max_percentile.mean"] >= args.max_percentile_threshold
 
-    
-
     # Apply --peak-variants-only
     if args.peak_variants_only == True:
         if "peak_overlap" not in existing_headers:
@@ -64,12 +63,20 @@ def main(args = None):
         else:
             filter_mask &= df["peak_overlap"] == True
 
-    new_df = df[filter_mask]
+    filtered_variants = df[filter_mask]
+
+    # Check if any variants remain after filtering
+    if len(filtered_variants) == 0:
+        logging.warning(f"No variants remain after filtering. Exiting.")
+        exit(1)
 
     out_file = f"{get_filter_output_file(args.filter_output_dir, args.sample_name)}"
-    new_df.to_csv(out_file,\
+    filtered_variants.to_csv(out_file,\
                   sep="\t",\
                   index=False)
+
+    logging.info(f"Running scoring step on the filtered variants to generate predictions...")
+    variant_scoring.main(args, filter_output_dir_override=args.filter_output_dir, filtered_variants_df_override=filtered_variants)
     
     logging.info(f"Filter step completed! Output written to: {out_file}")
 

@@ -29,7 +29,7 @@ def main(args = None):
     if not os.path.isdir(args.shap_output_dir):
         raise OSError(f"Output directory ({args.shap_output_dir}) does not exist")
 
-    shap_output_prefixes = [ get_shap_output_file_prefix(args.filter_output_dir, args.sample_name, index) for index in range(len(args.models)) ]
+    shap_output_prefixes = [ get_shap_output_file_prefix(args.shap_output_dir, args.sample_name, index) for index in range(len(args.models)) ]
     is_using_file_overrides = False
     if args.shap_filenames is not None:
         if len(args.shap_filenames) != len(args.models):
@@ -69,7 +69,7 @@ def main(args = None):
         logging.debug(f"Filtered variants table to only include valid variants:\n{variants_table.head()}\n{variants_table.shape}")
         variants_table.reset_index(drop=True, inplace=True)
         
-        for shap_type in args.shap_type:
+        for shap_type_index, shap_type in enumerate(args.shap_type):
             # fetch model prediction for variants
             batch_size=args.batch_size
             ### set the batch size to the length of variant table in case variant table is small to avoid error
@@ -102,6 +102,7 @@ def main(args = None):
                                                         bias=None,
                                                         shuf=False,
                                                         shap_type=shap_type)
+                # TODO: add fetch_variant_predictions here. You'll need to create new .prioritized files, which the viz step will take if the no_hdf5 flag is provided.
                 
                 # allele1_write[i*batch_size:(i+1)*batch_size] = allele1_shap
                 # allele2_write[i*batch_size:(i+1)*batch_size] = allele2_shap
@@ -196,7 +197,9 @@ def main(args = None):
 
             dd.io.save(output_h5, shap_dict, compression='blosc')
 
-        logging.info(f"Finished SHAP for {model_name} ({model_index+1}/{len(model_and_output_prefixes)}) and saved to {output_h5}")
+            logging.info(f"({(model_index*2)+shap_type_index+1}/{len(model_and_output_prefixes)*len(args.shap_type)+1}) Finished SHAP for {model_name} for shap type {shap_type} and saved to {output_h5}")
+    
+    logging.info("Finished SHAP calculations")
 
 if __name__ == "__main__":
     main()
