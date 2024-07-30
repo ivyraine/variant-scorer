@@ -11,6 +11,7 @@ from generators.variant_generator import VariantGenerator
 from generators.peak_generator import PeakGenerator
 from utils import losses
 import logging
+import os
 
 
 def get_variant_schema(schema):

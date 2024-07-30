@@ -39,17 +39,32 @@ summary_args = {
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 }
 
+class ClosestGenesAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, 'closest_genes_file', values[0])
+        setattr(namespace, 'closest_gene_count', int(values[1]))
+
+class ClosestGenesInWindowAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, 'closest_genes_in_window_file', values[0])
+        setattr(namespace, 'closest_genes_window_size', int(values[1]))
+
+class AdastraAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if values:
+            setattr(namespace, 'adastra_tf_file', values[0])
+            setattr(namespace, 'adastra_celltype_file', values[1])
+        setattr(namespace, self.dest, True)
+
 annotation_args = {
     ("-suout", "--summary-output-dir"): { "type": str, "help": "The directory to store the summary file with average scores across folds like so: <annotation-output-dir>/<sample-name>.annotations.tsv; directory should already exist." , "required": True},
     ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
     ("-aout", "--annotation-output-dir"): { "type": str, "help": "The directory to store the unfiltered annotations file like so: <annotation-output-dir>/<sample-name>.annotations.tsv. This directory should already exist.", "required": True},
     ("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
     ("-p", "--peaks"): { "type": str, "help": "Adds overlapping peaks information. Bed file containing peak regions."},
-    ("-cg", "--closest-genes"): { "type": str, "help": "Adds closest gene annotations. Bed file containing gene regions. Default amount is 3." },
-    ("-cgc", "--closest-gene-count"): { "type": int, "help": "Changes the number of closest genes (using the -g flag) annotated to the specified number." },
-    ("-aa", "--add-adastra"): { "action": "store_true", "help": "Annotate with ADASTRA. Requires downloadable ADASTRA data, which you must provide using the -aatf and -aact flags." },
-    ("-aatf", "--add-adastra-tf"): { "type": argparse.FileType('r'), "help": "The file containing ADASTRA TF data." },
-    ("-aact", "--add-adastra-celltype"): { "type": argparse.FileType('r'), "help": "The file containing ADASTRA cell type data." },
+    ("-cg", "--add-closest-genes"): { "nargs": 2, "metavar": ('GENE_BED', 'COUNT'), "action": ClosestGenesAction, "help": "Adds closest gene annotations. Requires a bed file containing gene regions and the number of closest genes." },
+    ("-cgw", "--add-closest-genes-in-window"): { "nargs": 2, "metavar": ('GENE_BED', 'WINDOWSIZE'), "action": ClosestGenesInWindowAction, "help": "Adds annotations for the closest genes within a window. Requires a bed file containing gene regions and the number of closest genes." },
+    ("-aa", "--add-adastra"): { "nargs": 2, "metavar": ('ADASTRA_TF', 'ADASTRA_CELLTYPE'), "action": AdastraAction, "help": "Annotate with ADASTRA. Provide ADASTRA TF and cell type data files." },
     ("-th", "--threads"): { "type": int, "help": "The maximum amount of threads to use, where possible." },
     ("-r2", "--r2"): { "type": str, "help": "Adds r2 annotations. Requires a PLINK .ld file." },
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },

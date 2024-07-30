@@ -10,8 +10,6 @@ from utils.argmanager import *
 from utils.helpers import *
 pd.set_option('display.max_columns', 20)
 
-
-DEFAULT_CLOSEST_GENE_COUNT = 3
 DEFAULT_THREADS = 4
 
 def get_asb_adastra(chunk, sig_adastra_tf, sig_adastra_celltype):
@@ -62,15 +60,8 @@ def main(args = None):
 
         args = fetch_annotation_args()
 
-    if args.add_adastra:
-        if not args.add_adastra_tf:
-            raise ValueError("ADASTRA TF file (-aatf) is required for ADASTRA annotation")    
-        if not args.add_adastra_celltype:
-            raise ValueError("ADASTRA celltype file (-aact) is required for ADASTRA annotation")
-
     variant_scores_file = get_summary_output_file(args.summary_output_dir, args.sample_name)
     peak_path = args.peaks
-    tss_path = args.closest_genes
 
     variant_scores = pd.read_table(variant_scores_file)
     # TODO use os temp instead.
@@ -90,12 +81,13 @@ def main(args = None):
         variant_scores_bed_format.sort_values(by=["chr","pos","end"], inplace=True)
 
     variant_bed = pybedtools.BedTool.from_dataframe(variant_scores_bed_format)
-    if args.closest_genes:
 
+    if args.closest_genes_file:
+        tss_path = args.closest_genes_file
         logging.info("Annotating with closest genes")
         gene_df = pd.read_table(tss_path, header=None)
         gene_bed = pybedtools.BedTool.from_dataframe(gene_df)
-        closest_gene_count = args.closest_gene_count if args.closest_gene_count else DEFAULT_CLOSEST_GENE_COUNT
+        closest_gene_count = args.closest_gene_count
         closest_genes_bed = variant_bed.closest(gene_bed, d=True, t='first', k=closest_gene_count)
 
         closest_gene_df = closest_genes_bed.to_dataframe(header=None)
@@ -121,6 +113,42 @@ def main(args = None):
 
         closest_gene_df.drop_duplicates(inplace=True)
         variant_scores = variant_scores.merge(closest_gene_df, on='variant_id', how='left')
+
+    if args.closest_genes_in_window_file:
+        tss_path = args.closest_genes_in_window_file
+        logging.info("Annotating with closest genes within window size")
+        gene_df = pd.read_table(tss_path, header=None)
+        gene_bed = pybedtools.BedTool.from_dataframe(gene_df)
+        closest_genes_window_size = args.closest_genes_window_size
+        print(closest_genes_window_size)
+        closest_genes_bed = variant_bed.window(gene_bed, w=closest_genes_window_size)
+
+        closest_gene_df = closest_genes_bed.to_dataframe(header=None)
+
+        closest_gene_df = closest_gene_df.rename({5: 'variant_id'}, axis=1)
+        closest_gene_df = closest_gene_df.rename({9: 'a_closest_gene'}, axis=1)
+
+        closest_genes = {}
+        for index, row in closest_gene_df.iterrows():
+            variant_id = row['variant_id']
+            gene_name = row['a_closest_gene']
+            print(gene_name)
+
+            if variant_id not in closest_genes:
+                closest_genes[variant_id] = []
+            closest_genes[variant_id].append(gene_name)
+
+
+        logging.debug(f"Closest genes within window table:\n{closest_gene_df.shape}\n{closest_gene_df.head()}")
+        closest_gene_df = closest_gene_df[['variant_id']]
+        print(closest_genes)
+        closest_genes_in_window_label = f"closest_genes_in_{closest_genes_window_size}_bp"
+        closest_gene_df[closest_genes_in_window_label] = closest_gene_df['variant_id'].apply(
+            lambda x: '; '.join(closest_genes[x]) if x in closest_genes else '.'
+        )
+
+        closest_gene_df.drop_duplicates(inplace=True)
+        variant_scores = variant_scores.merge(closest_gene_df[['variant_id', closest_genes_in_window_label]], on='variant_id', how='left')
 
     if args.peaks:
 
@@ -176,9 +204,9 @@ def main(args = None):
                 on=['variant_id'],
                 how='left')
             
-    if args.add_adastra and args.add_adastra_tf and args.add_adastra_celltype:
-        adastra_tf_file = args.add_adastra_tf
-        adastra_celltype_file = args.add_adastra_celltype
+    if args.add_adastra and args.adastra_tf_file and args.adastra_celltype_file:
+        adastra_tf_file = args.adastra_tf_file
+        adastra_celltype_file = args.adastra_celltype_file
         sig_adastra_tf = pd.read_table(adastra_tf_file)
         sig_adastra_celltype = pd.read_table(adastra_celltype_file)
 
