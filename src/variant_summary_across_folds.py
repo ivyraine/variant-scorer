@@ -56,7 +56,7 @@ def main(args = None):
                           sep="\t",\
                           index=False)
 
-    print("DONE")
+    logging.info(f"Summary step completed! Output written to: {out_file}")
 
 
 if __name__ == "__main__":

@@ -34,7 +34,8 @@ summary_args = {
     ("-suout", "--summary-output-dir"): { "type": str, "help": "The directory to store the summary file with average scores across folds; directory should already exist." , "required": True},
     ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename, like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
     ("-sc", "--schema"): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
-    ("-scf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files to be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used.", "required": True},
+    ("-scf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files to be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
+    ("-m", "--models"): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided."},
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 }
 
@@ -88,12 +89,13 @@ shap_args = {
 }
 
 viz_args = {
+    ("-l", "--variant-list"): { "type": str, "help": "a TSV file containing a list of variants to score.", "required": True},
     ("-m", "--models"): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
     ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
+    ("-fout", "--filter-output-dir"): {"type": str, "help": "The directory to store the filtered annotations file like so: <filter-output-dir>/<sample-name>.annotations.filtered.tsv. This directory should already exist.", "required": True},
     ("-shout", "--shap-output-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script. This directory should already exist.", "required": True},
-    ("-scout", "--scoring-output-dir"): {"type": str, "help": "The directory to store all output files like: <output-dir>/<sample-name>.<index>.variant_scores.tsv; directory should already exist.", "required": True},
     ("-vout", "--viz-output-dir"): {"type": str, "help": "The directory that will store the visualization outputs. This directory should already exist.", "required": True},
-    ("-scf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
+    ("-fscf", "--filter-score-filenames"): { "nargs": '+', "help": "A list of file names of filtered variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <filter-output-dir>/<filtered-score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
     # ("--no-hdf5",): {"action": "store_true", "help": "Prevents saving detailed predictions in hdf5 file during storing, and using those files during the shap and viz steps. Recommended when the variants list is large (>1,000,000)."},
     ("-st", "--shap-type"): { "nargs": '+', "default": ["counts"], "help": "Specify shap value type(s) to calculate." },
     ("-predo", "--predictions-override"): { "type": str, "help": "The name of the variant effect predictions' file. Use this if you want to use a name other than the default."},
@@ -176,6 +178,9 @@ def fetch_main_parser():
         included_modules.append("scoring")
 
     if not conditional_args.no_summary:
+        # If args_dict has --models, then make summary_args' --models required:
+        if any("--models" in arg_names for arg_names in args_dict):
+            summary_args[("-m", "--models")]["required"] = True
         args_dict.update(summary_args)
         included_modules.append("summary")
 
@@ -211,6 +216,23 @@ def fetch_main_parser():
     parser.description = f"This script (varscore) annotates genetic variants using chrombpnet and similar models. It can be run in multiple steps, each of which can be disabled using the --no-* flags. The steps are: scoring, summary, annotation, filter, and shap. The following flags are shared between the following modules: {included_modules_str}."
 
     # Parse all args again
-    args = parser.parse_args()
+    # args = parser.parse_args()
+    args, unknown_args = parser.parse_known_args()
+
+    # Provide information about unneeded and incorrect arguments.
+    all_possible_args = set([arg for arg_names in args_dict for arg in arg_names])
+    unneeded_args = []
+    error_args = []
+    for unknown_arg in unknown_args:
+        if unknown_arg in all_possible_args:
+            unneeded_args.append(unknown_arg)
+        else:
+            error_args.append(unknown_arg)
+    for arg in unneeded_args:
+        print(f"Warning: Argument '{arg}' is not needed for chosen modules ({included_modules_str}) and will be ignored.")
+    for arg in error_args:
+        print(f"Error: Argument '{arg}' is not recognized.")
+    if len(error_args) > 0:
+        exit(1)
 
     return args

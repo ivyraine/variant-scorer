@@ -15,7 +15,6 @@ from utils import argmanager, losses
 from utils.helpers import *
 import logging
 
-
 def main(args = None, filter_output_dir_override = None, filtered_variants_df_override = None):
     if args is None:
         args = argmanager.fetch_scoring_args()
@@ -44,7 +43,7 @@ def main(args = None, filter_output_dir_override = None, filtered_variants_df_ov
 
     variants_table = None
     if filtered_variants_df_override is not None:
-        variants_table = filtered_variants_df_override
+        variants_table = filtered_variants_df_override[['chr', 'pos', 'allele1', 'allele2', 'variant_id']]
     else:
         variants_table = load_variant_table(args.variant_list, args.schema)
         variants_table = variants_table.fillna('-')
@@ -287,11 +286,10 @@ def main(args = None, filter_output_dir_override = None, filtered_variants_df_ov
 
         logging.info(f"Output score table:\n{variants_table.head()}\n{variants_table.shape}")
 
-        if filter_output_dir_override is not None:
-            output_tsv = f"{scoring_output_prefix}.variant_scores.tsv"
-            if is_using_result_filename_overrides:
-                output_tsv = f"{scoring_output_prefix}.tsv"
-            variants_table.to_csv(output_tsv, sep="\t", index=False)
+        output_tsv = f"{scoring_output_prefix}.variant_scores.tsv"
+        if is_using_result_filename_overrides:
+            output_tsv = f"{scoring_output_prefix}.tsv"
+        variants_table.to_csv(output_tsv, sep="\t", index=False)
 
         # store predictions at variants
         if hasattr(args, "no_hdf5") and not args.no_hdf5 or filter_output_dir_override is not None:
@@ -300,10 +298,16 @@ def main(args = None, filter_output_dir_override = None, filtered_variants_df_ov
                 output_h5 = f"{scoring_output_prefix}.h5"
             with h5py.File(output_h5, 'w') as f:
                 observed = f.create_group('observed')
+                # Print shapes
                 observed.create_dataset('allele1_pred_counts', data=allele1_pred_counts, compression='gzip', compression_opts=9)
                 observed.create_dataset('allele2_pred_counts', data=allele2_pred_counts, compression='gzip', compression_opts=9)
                 observed.create_dataset('allele1_pred_profiles', data=allele1_pred_profiles, compression='gzip', compression_opts=9)
                 observed.create_dataset('allele2_pred_profiles', data=allele2_pred_profiles, compression='gzip', compression_opts=9)
+                variant_ids_encoded = variant_ids.astype(h5py.string_dtype(encoding='utf-8'))
+                # Unencode it
+                # variant_ids_decoded = [x.decode('utf-8') for x in variant_ids_encoded]
+                # print(variant_ids_decoded)
+                observed.create_dataset('variant_ids', data=variant_ids_encoded, compression='gzip', compression_opts=9)
                 if len(shuf_variants_table) > 0:
                     shuffled = f.create_group('shuffled')
                     shuffled.create_dataset('shuf_allele1_pred_counts', data=shuf_allele1_pred_counts, compression='gzip', compression_opts=9)

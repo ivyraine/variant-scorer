@@ -169,16 +169,32 @@ def main(args = None):
             if is_using_file_overrides:
                 output_h5 = f"{shap_output_prefix}.h5"
 
+            variant_ids_utf8 = np.array([vid.encode('utf-8') for vid in variant_ids])
             shap_dict = {
-                'raw': {'seq': np.concatenate((np.transpose(allele1_seqs, (0, 2, 1)).astype(np.int8),
-                                            np.transpose(allele2_seqs, (0, 2, 1)).astype(np.int8)))},
-                'shap': {'seq': np.concatenate((np.transpose(allele1_scores, (0, 2, 1)).astype(np.float16),
-                                                np.transpose(allele2_scores, (0, 2, 1)).astype(np.float16)))},
-                'projected_shap': {'seq': np.concatenate((np.transpose(allele1_seqs * allele1_scores, (0, 2, 1)).astype(np.float16),
-                                                        np.transpose(allele2_seqs * allele2_scores, (0, 2, 1)).astype(np.float16)))},
-                'variant_ids': np.concatenate((np.array(variant_ids), np.array(variant_ids))),
-                'alleles': np.concatenate((np.array([0] * len(variant_ids)),
-                                        np.array([1] * len(variant_ids))))}
+                'allele1': {
+                    'raw': { 
+                        'seq': np.transpose(allele1_seqs, (0, 2, 1)).astype(np.int8)
+                    },
+                    'shap': {
+                        'seq': np.transpose(allele1_scores, (0, 2, 1)).astype(np.float16)
+                    },
+                    'projected_shap': {
+                        'seq': np.transpose(allele1_seqs * allele1_scores, (0, 2, 1)).astype(np.float16)
+                    },
+                },
+                'allele2': {
+                    'raw': {
+                        'seq': np.transpose(allele2_seqs, (0, 2, 1)).astype(np.int8)
+                    },
+                    'shap': {
+                        'seq': np.transpose(allele2_scores, (0, 2, 1)).astype(np.float16)
+                    },
+                    'projected_shap': {
+                        'seq': np.transpose(allele2_seqs * allele2_scores, (0, 2, 1)).astype(np.float16)
+                    },
+                },
+                'variant_ids': variant_ids_utf8,
+            }
 
             # with h5py.File(output_h5, 'w') as h5f:
             #     for key, value in shap_dict.items():
@@ -197,7 +213,7 @@ def main(args = None):
 
             dd.io.save(output_h5, shap_dict, compression='blosc')
 
-            logging.info(f"({(model_index*2)+shap_type_index+1}/{len(model_and_output_prefixes)*len(args.shap_type)+1}) Finished SHAP for {model_name} for shap type {shap_type} and saved to {output_h5}")
+            logging.info(f"({(model_index*2)+shap_type_index+1}/{len(model_and_output_prefixes)*len(args.shap_type)}) Finished SHAP for {model_name} for shap type {shap_type} and saved to {output_h5}")
     
     logging.info("Finished SHAP calculations")
 
