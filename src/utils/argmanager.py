@@ -1,5 +1,7 @@
 import sys
 import argparse
+import os
+import sys
 
 scoring_args = {
     ("-l", "--variant-list"): { "type": str, "help": "a TSV file containing a list of variants to score.", "required": True},
@@ -39,22 +41,73 @@ summary_args = {
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 }
 
-class ClosestGenesAction(argparse.Action):
+class ClosestElementsAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, 'closest_genes_file', values[0])
-        setattr(namespace, 'closest_gene_count', int(values[1]))
+        if len(values) % 3 != 0:
+            raise argparse.ArgumentError(self, f"Must provide 3 arguments per element type: <BED1> <COUNT1> <LABEL1> <BED2> <COUNT2> <LABEL2> ...; you provided {len(values)} arguments: {values}")
+        
+        closest_n_elements_args = []
+        for i in range(0, len(values), 3):
+            closest_elements_file = values[i]
+            closest_elements_count = int(values[i + 1])
+            closest_elements_label = values[i + 2]
+            
+            if not os.path.isfile(closest_elements_file):
+                parser.error(f"TSV file '{closest_elements_file}' does not exist.")
+            
+            closest_n_elements_args.append((closest_elements_file, closest_elements_count, closest_elements_label))
+            
+        setattr(namespace, "closest_n_elements_args", closest_n_elements_args)
+        setattr(namespace, self.dest, True)
 
-class ClosestGenesInWindowAction(argparse.Action):
+class ClosestElementsInWindowAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, 'closest_genes_in_window_file', values[0])
-        setattr(namespace, 'closest_genes_window_size', int(values[1]))
+        print(len(values))
+        if len(values) % 3 != 0:
+            raise argparse.ArgumentError(self, f"Must provide 3 arguments per element type: <BED1> <SIZE1> <LABEL1> <BED2> <SIZE2> <LABEL2> ...; you provided {len(values)} arguments: {values}")
+        
+        closest_n_elements_args = []
+        for i in range(0, len(values), 3):
+            closest_elements_window_file = values[i]
+            closest_elements_window_size = int(values[i + 1])
+            closest_elements_window_label = values[i + 2]
+            
+            if not os.path.isfile(closest_elements_window_file):
+                parser.error(f"TSV file '{closest_elements_window_file}' does not exist.")
+            
+            closest_n_elements_args.append((closest_elements_window_file, closest_elements_window_size, closest_elements_window_label))
+            
+        setattr(namespace, "closest_elements_in_window_args", closest_n_elements_args)
+        setattr(namespace, self.dest, True)
 
 class AdastraAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        if values:
-            setattr(namespace, 'adastra_tf_file', values[0])
-            setattr(namespace, 'adastra_celltype_file', values[1])
+        setattr(namespace, 'adastra_tf_file', values[0])
+        setattr(namespace, 'adastra_celltype_file', values[1])
         setattr(namespace, self.dest, True)
+
+class JoinTSVsAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        valid_directions = {'left', 'right', 'inner', 'outer'}
+        join_args = []
+
+        if len(values) % 3 != 0:
+            raise argparse.ArgumentError(self, f"Must provide 3 arguments per TSV: <TSV1> <LABEL1> <DIRECTION1> <TSV2> <LABEL2> <DIRECTION2> ...; you provided {len(values)} arguments: {values}")
+        for i in range(0, len(values), 3):
+            tsv_file = values[i]
+            label = values[i + 1]
+            direction = values[i + 2]
+            
+            if direction not in valid_directions:
+                parser.error(f"Invalid direction '{direction}'. Valid directions are {valid_directions}.")
+            
+            if not os.path.isfile(tsv_file):
+                parser.error(f"TSV file '{tsv_file}' does not exist.")
+            
+            join_args.append((tsv_file, label, direction))
+        setattr(namespace, "join_args", join_args)
+        setattr(namespace, self.dest, True)
+
 
 annotation_args = {
     ("-suout", "--summary-output-dir"): { "type": str, "help": "The directory to store the summary file with average scores across folds like so: <annotation-output-dir>/<sample-name>.annotations.tsv; directory should already exist." , "required": True},
@@ -62,9 +115,10 @@ annotation_args = {
     ("-aout", "--annotation-output-dir"): { "type": str, "help": "The directory to store the unfiltered annotations file like so: <annotation-output-dir>/<sample-name>.annotations.tsv. This directory should already exist.", "required": True},
     ("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
     ("-p", "--peaks"): { "type": str, "help": "Adds overlapping peaks information. Bed file containing peak regions."},
-    ("-cg", "--add-closest-genes"): { "nargs": 2, "metavar": ('GENE_BED', 'COUNT'), "action": ClosestGenesAction, "help": "Adds closest gene annotations. Requires a bed file containing gene regions and the number of closest genes." },
-    ("-cgw", "--add-closest-genes-in-window"): { "nargs": 2, "metavar": ('GENE_BED', 'WINDOWSIZE'), "action": ClosestGenesInWindowAction, "help": "Adds annotations for the closest genes within a window. Requires a bed file containing gene regions and the number of closest genes." },
-    ("-aa", "--add-adastra"): { "nargs": 2, "metavar": ('ADASTRA_TF', 'ADASTRA_CELLTYPE'), "action": AdastraAction, "help": "Annotate with ADASTRA. Provide ADASTRA TF and cell type data files." },
+    ("-ce", "--add-n-closest-elements"): { "nargs": '+', "metavar": ('BED1 COUNT1 LABEL1', 'BED2 COUNT2 LABEL2'), "action": ClosestElementsAction, "help": "Adds variant annotations for the N closest elements (such as genes) and their distances to the variant. Takes in (1) a bed file containing gene regions, (2) number of closest genes, and (3) output an optional label. For example, `--add-closest-elements hg38.genes.bed 5 gene hg38.lnRNA.bed 3 lnRNA` will output 5`closest_gene_i` and `closest_gene_i_distance` columns, as well as 3 `closest_lnRNA_i` and `closest_lnRNA_i_distance` columns.", "default": False },
+    ("-cew", "--add-closest-elements-in-window"): { "nargs": '+', "metavar": ('BED1 SIZE1 LABEL1', 'BED2 SIZE2 LABEL2'), "action": ClosestElementsInWindowAction, "help": "Add variant annotations for the elements (such as genes) existing up to <WINDOWSIZE> bp away from the variant. Takes in (1) a bed file containing gene regions, (2) the window size, and (3) output an optional label. For example, `--add-closest-elements-in-window hg38.genes.bed 100000 genes` will output genes existing within 100000 bp of each variant to their `genes_within_100000_bp` column.", "default": False },
+    ("-aa", "--add-adastra"): { "nargs": 2, "metavar": ('ADASTRA_TF_FILE', 'ADASTRA_CELLTYPE_FILE'), "action": AdastraAction, "help": "Annotate with ADASTRA. Provide ADASTRA TF and cell type data files.", "default": False },
+    ("-j", "--join-tsvs"): { "nargs": '+', "metavar": ('TSV1 LABEL1 DIRECTION1', 'TSV2 LABEL2 DIRECTION2'), "action": JoinTSVsAction, "help": "Add external annotations by joining variant annotations with external TSVs on the specified labels and direction. Valid directions are 'left', 'right', 'inner', 'outer'. For example, `--join-tsvs 1.tsv variant_id left 2.tsv variant_id outer 3.tsv hpo left`.", "default": False},
     ("-th", "--threads"): { "type": int, "help": "The maximum amount of threads to use, where possible." },
     ("-r2", "--r2"): { "type": str, "help": "Adds r2 annotations. Requires a PLINK .ld file." },
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },

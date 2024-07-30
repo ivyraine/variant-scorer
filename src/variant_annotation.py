@@ -82,73 +82,89 @@ def main(args = None):
 
     variant_bed = pybedtools.BedTool.from_dataframe(variant_scores_bed_format)
 
-    if args.closest_genes_file:
-        tss_path = args.closest_genes_file
-        logging.info("Annotating with closest genes")
-        gene_df = pd.read_table(tss_path, header=None)
-        gene_bed = pybedtools.BedTool.from_dataframe(gene_df)
-        closest_gene_count = args.closest_gene_count
-        closest_genes_bed = variant_bed.closest(gene_bed, d=True, t='first', k=closest_gene_count)
+    print(args)
+    if args.join_tsvs:
+        for tsv, label, direction in reversed(args.join_args):
+            join_df = pd.read_csv(tsv, sep='\t')
+            variant_scores = variant_scores.merge(join_df, how=direction, on=label)
 
-        closest_gene_df = closest_genes_bed.to_dataframe(header=None)
+    if args.add_n_closest_elements:
+        for elements_file, n_elements, element_label in args.closest_n_elements_args:
+            logging.info(f"Annotating with closest {n_elements} elements")
+            element_df = pd.read_table(elements_file, header=None)
+            print(element_df.head())
+            element_bed = pybedtools.BedTool.from_dataframe(element_df)
+            closest_elements_bed = variant_bed.closest(element_bed, d=True, t='first', k=n_elements)
 
-        logging.debug(f"Closest genes table:\n{closest_gene_df.shape}\n{closest_gene_df.head()}")
+            closest_element_df = closest_elements_bed.to_dataframe(header=None)
+            if not closest_element_df.empty:
+                logging.debug(f"Closest elements ({element_label}) table:\n{closest_element_df.shape}\n{closest_element_df.head()}")
 
-        closest_genes = {}
-        gene_dists = {}
+                closest_elements = {}
+                element_dists = {}
 
-        for index, row in closest_gene_df.iterrows():
-            if not row[5] in closest_genes:
-                closest_genes[row[5]] = []
-                gene_dists[row[5]] = []
-            closest_genes[row[5]].append(row.iloc[9])
-            gene_dists[row[5]].append(row.iloc[-1])
+                for index, row in closest_element_df.iterrows():
+                    if not row[5] in closest_elements:
+                        closest_elements[row[5]] = []
+                        element_dists[row[5]] = []
+                    closest_elements[row[5]].append(row.iloc[9])
+                    element_dists[row[5]].append(row.iloc[-1])
 
-        closest_gene_df = closest_gene_df.rename({5: 'variant_id'}, axis=1)
-        closest_gene_df = closest_gene_df[['variant_id']]
+                closest_element_df = closest_element_df.rename({5: 'variant_id'}, axis=1)
+                closest_element_df = closest_element_df[['variant_id']]
 
-        for i in range(closest_gene_count):
-            closest_gene_df[f'closest_gene_{i+1}'] = closest_gene_df['variant_id'].apply(lambda x: closest_genes[x][i] if len(closest_genes[x]) > i else '.')
-            closest_gene_df[f'gene_distance_{i+1}'] = closest_gene_df['variant_id'].apply(lambda x: gene_dists[x][i] if len(closest_genes[x]) > i else '.')
+                for i in range(n_elements):
+                    closest_element_df[f'closest_{element_label}_{i+1}'] = closest_element_df['variant_id'].apply(lambda x: closest_elements[x][i] if len(closest_elements[x]) > i else '.')
+                    closest_element_df[f'closest_{element_label}_{i+1}_distance'] = closest_element_df['variant_id'].apply(lambda x: element_dists[x][i] if len(closest_elements[x]) > i else '.')
 
-        closest_gene_df.drop_duplicates(inplace=True)
-        variant_scores = variant_scores.merge(closest_gene_df, on='variant_id', how='left')
+                closest_element_df.drop_duplicates(inplace=True)
+            else:  
+                # Make empty columns if no elements are found.
+                closest_element_df = pd.DataFrame(columns=['variant_id'])
+                for i in range(n_elements):
+                    closest_element_df[f'closest_{element_label}_{i+1}'] = ''
+                    closest_element_df[f'closest_{element_label}_{i+1}_distance'] = ''
+            variant_scores = variant_scores.merge(closest_element_df, on='variant_id', how='left')
 
-    if args.closest_genes_in_window_file:
-        tss_path = args.closest_genes_in_window_file
-        logging.info("Annotating with closest genes within window size")
-        gene_df = pd.read_table(tss_path, header=None)
-        gene_bed = pybedtools.BedTool.from_dataframe(gene_df)
-        closest_genes_window_size = args.closest_genes_window_size
-        print(closest_genes_window_size)
-        closest_genes_bed = variant_bed.window(gene_bed, w=closest_genes_window_size)
+    if args.add_closest_elements_in_window:
 
-        closest_gene_df = closest_genes_bed.to_dataframe(header=None)
+        for elements_file, window_size, element_label in args.closest_elements_in_window_args:
+            print(elements_file, window_size, element_label)
+            logging.info("Annotating with closest elements within window size")
+            element_df = pd.read_table(elements_file, header=None)
+            element_bed = pybedtools.BedTool.from_dataframe(element_df)
+            closest_elements_bed = variant_bed.window(element_bed, w=window_size)
+            print("Closest elements bed", closest_elements_bed)
+            closest_element_df = closest_elements_bed.to_dataframe(header=None)
+            if not closest_element_df.empty:
+                closest_element_df = closest_element_df.rename({5: 'variant_id', 9: 'a_closest_element'}, axis=1)
 
-        closest_gene_df = closest_gene_df.rename({5: 'variant_id'}, axis=1)
-        closest_gene_df = closest_gene_df.rename({9: 'a_closest_gene'}, axis=1)
+                closest_elements = {}
+                for index, row in closest_element_df.iterrows():
+                    variant_id = row['variant_id']
+                    element_name = row['a_closest_element']
+                    print(element_name)
 
-        closest_genes = {}
-        for index, row in closest_gene_df.iterrows():
-            variant_id = row['variant_id']
-            gene_name = row['a_closest_gene']
-            print(gene_name)
-
-            if variant_id not in closest_genes:
-                closest_genes[variant_id] = []
-            closest_genes[variant_id].append(gene_name)
+                    if variant_id not in closest_elements:
+                        closest_elements[variant_id] = []
+                    closest_elements[variant_id].append(element_name)
 
 
-        logging.debug(f"Closest genes within window table:\n{closest_gene_df.shape}\n{closest_gene_df.head()}")
-        closest_gene_df = closest_gene_df[['variant_id']]
-        print(closest_genes)
-        closest_genes_in_window_label = f"closest_genes_in_{closest_genes_window_size}_bp"
-        closest_gene_df[closest_genes_in_window_label] = closest_gene_df['variant_id'].apply(
-            lambda x: '; '.join(closest_genes[x]) if x in closest_genes else '.'
-        )
+                logging.debug(f"Closest elements ({element_label}) within window table:\n{closest_element_df.shape}\n{closest_element_df.head()}")
+                closest_element_df = closest_element_df[['variant_id']]
+                output_label = f"{element_label}_within_{window_size}_bp"
+                closest_element_df[output_label] = closest_element_df['variant_id'].apply(
+                    lambda x: '; '.join(closest_elements[x]) if x in closest_elements else ''
+                )
 
-        closest_gene_df.drop_duplicates(inplace=True)
-        variant_scores = variant_scores.merge(closest_gene_df[['variant_id', closest_genes_in_window_label]], on='variant_id', how='left')
+                closest_element_df.drop_duplicates(inplace=True)
+            else:
+                # Make empty column if no elements are within the window.
+                closest_element_df = pd.DataFrame(columns=['variant_id', f"{element_label}_within_{window_size}_bp"])
+                closest_element_df['variant_id'] = variant_scores['variant_id']
+                closest_element_df[f"{element_label}_within_{window_size}_bp"] = ''
+
+            variant_scores = variant_scores.merge(closest_element_df[['variant_id', output_label]], on='variant_id', how='left')
 
     if args.peaks:
 
@@ -204,7 +220,7 @@ def main(args = None):
                 on=['variant_id'],
                 how='left')
             
-    if args.add_adastra and args.adastra_tf_file and args.adastra_celltype_file:
+    if args.add_adastra:
         adastra_tf_file = args.adastra_tf_file
         adastra_celltype_file = args.adastra_celltype_file
         sig_adastra_tf = pd.read_table(adastra_tf_file)
