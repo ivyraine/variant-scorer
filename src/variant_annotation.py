@@ -4,9 +4,11 @@ import os
 import subprocess
 import logging
 from multiprocessing import Pool
+import pybedtools
 
 from utils.argmanager import *
 from utils.helpers import *
+pd.set_option('display.max_columns', 20)
 
 
 DEFAULT_CLOSEST_GENE_COUNT = 3
@@ -71,49 +73,46 @@ def main(args = None):
     tss_path = args.closest_genes
 
     variant_scores = pd.read_table(variant_scores_file)
-    tmp_bed_file_path = f"/tmp/{args.sample_name}.variant_table.tmp.bed"
+    # TODO use os temp instead.
+    # tmp_bed_file_path = f"/tmp/{args.sample_name}.variant_table.tmp.bed"
 
+    variant_scores_bed_format = None
     if args.schema == "bed":
         if variant_scores['pos'].equals(variant_scores['end']):
             variant_scores['pos'] = variant_scores['pos'] - 1
         variant_scores_bed_format = variant_scores[['chr','pos','end','allele1','allele2','variant_id']].copy()
+        variant_scores_bed_format.sort_values(by=["chr","pos","end"], inplace=True)
     else:
         variant_scores_bed_format = variant_scores[['chr','pos','allele1','allele2','variant_id']].copy()
         variant_scores_bed_format['pos']  = variant_scores_bed_format.apply(lambda x: int(x.pos)-1, axis = 1)
         variant_scores_bed_format['end']  = variant_scores_bed_format.apply(lambda x: int(x.pos)+len(x.allele1), axis = 1)
         variant_scores_bed_format = variant_scores_bed_format[['chr','pos','end','allele1','allele2','variant_id']]
-        variant_scores_bed_format = variant_scores_bed_format.sort_values(["chr","pos","end"])
+        variant_scores_bed_format.sort_values(by=["chr","pos","end"], inplace=True)
 
-    variant_scores_bed_format.to_csv(tmp_bed_file_path,\
-                                     sep="\t",\
-                                     header=None,\
-                                     index=False)
-
+    variant_bed = pybedtools.BedTool.from_dataframe(variant_scores_bed_format)
     if args.closest_genes:
 
         logging.info("Annotating with closest genes")
+        gene_df = pd.read_table(tss_path, header=None)
+        gene_bed = pybedtools.BedTool.from_dataframe(gene_df)
         closest_gene_count = args.closest_gene_count if args.closest_gene_count else DEFAULT_CLOSEST_GENE_COUNT
-        closest_gene_path = f"/tmp/{args.sample_name}.closest_genes.tmp.bed"
-        gene_bedtools_intersect_cmd = f"bedtools closest -d -t first -k {closest_gene_count} -a {tmp_bed_file_path} -b {tss_path} > {closest_gene_path}"
-        _ = subprocess.call(gene_bedtools_intersect_cmd,\
-                            shell=True)
+        closest_genes_bed = variant_bed.closest(gene_bed, d=True, t='first', k=closest_gene_count)
 
-        closest_gene_df = pd.read_table(closest_gene_path, header=None)
-        os.remove(closest_gene_path)
+        closest_gene_df = closest_genes_bed.to_dataframe(header=None)
 
         logging.debug(f"Closest genes table:\n{closest_gene_df.shape}\n{closest_gene_df.head()}")
 
         closest_genes = {}
         gene_dists = {}
 
-        for index,row in closest_gene_df.iterrows():
+        for index, row in closest_gene_df.iterrows():
             if not row[5] in closest_genes:
                 closest_genes[row[5]] = []
                 gene_dists[row[5]] = []
-            closest_genes[row[5]].append(row[9])
-            gene_dists[row[5]].append(row[10])
+            closest_genes[row[5]].append(row.iloc[9])
+            gene_dists[row[5]].append(row.iloc[-1])
 
-        closest_gene_df = closest_gene_df.rename({5:'variant_id'},axis=1)
+        closest_gene_df = closest_gene_df.rename({5: 'variant_id'}, axis=1)
         closest_gene_df = closest_gene_df[['variant_id']]
 
         for i in range(closest_gene_count):
@@ -126,17 +125,15 @@ def main(args = None):
     if args.peaks:
 
         logging.info("Annotating with peak overlap")
-        peak_intersect_path = f"/tmp/{args.sample_name}.peak_overlap.tmp.bed"
-        peak_bedtools_intersect_cmd = "bedtools intersect -wa -u -a %s -b %s > %s"%(tmp_bed_file_path, peak_path, peak_intersect_path)
-        _ = subprocess.call(peak_bedtools_intersect_cmd,\
-                            shell=True)
+        peak_df = pd.read_table(peak_path, header=None)
+        peak_bed = pybedtools.BedTool.from_dataframe(peak_df)
+        peak_intersect_bed = variant_bed.intersect(peak_bed, wa=True, u=True)
 
-        peak_intersect_df = pd.read_table(peak_intersect_path, header=None)
-        os.remove(peak_intersect_path)
+        peak_intersect_df = peak_intersect_bed.to_dataframe(names=variant_scores_bed_format.columns.tolist())
 
         logging.debug(f"Peak overlap table:\n{peak_intersect_df.shape}\n{peak_intersect_df.head()}")
 
-        variant_scores['peak_overlap'] = variant_scores['variant_id'].isin(peak_intersect_df[5].tolist())
+        variant_scores['peak_overlap'] = variant_scores['variant_id'].isin(peak_intersect_df['variant_id'].tolist())
 
     if args.r2:
         logging.info("Annotating with r2")
@@ -209,7 +206,6 @@ def main(args = None):
 
         logging.debug(f"ADASTRA annotations added to variant scores:\n{variant_scores.shape}\n{variant_scores.head()}")
 
-    os.remove(tmp_bed_file_path)
 
     logging.info(f"Final annotation table:\n{variant_scores.shape}\n{variant_scores.head()}")
 

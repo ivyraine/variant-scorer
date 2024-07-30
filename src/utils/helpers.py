@@ -1,20 +1,15 @@
 from tensorflow.keras.utils import get_custom_objects
 from tensorflow.keras.models import load_model
 import tensorflow as tf
-import scipy.stats
 from scipy.spatial.distance import jensenshannon
 import pandas as pd
-import os
-import argparse
 import numpy as np
-import h5py
-import math
 from tqdm import tqdm
 import sys
 sys.path.append('..')
 from generators.variant_generator import VariantGenerator
 from generators.peak_generator import PeakGenerator
-from utils import argmanager, losses
+from utils import losses
 import logging
 
 
@@ -27,7 +22,8 @@ def get_variant_schema(schema):
     return var_SCHEMA[schema]
 
 def get_peak_schema(schema):
-    PEAK_SCHEMA = {'narrowpeak': ['chr', 'start', 'end', 3, 4, 5, 6, 7, 'rank', 'summit']}
+    PEAK_SCHEMA = {'narrowpeak': ['chr', 'start', 'end', 'peak_id', 'peak_score',
+                                  5, 6, 7, 'rank', 'summit']}
     return PEAK_SCHEMA[schema]
 
 def get_valid_peaks(chrom, pos, summit, input_len, chrom_sizes_dict):
@@ -61,7 +57,7 @@ def get_valid_variants(chrom, pos, allele1, allele2, input_len, chrom_sizes_dict
         return False
 
 def softmax(x, temp=1):
-    norm_x = x - np.mean(x,axis=1, keepdims=True)
+    norm_x = x - np.mean(x, axis=1, keepdims=True)
     return np.exp(temp*norm_x)/np.sum(np.exp(temp*norm_x), axis=1, keepdims=True)
 
 def load_model_wrapper(model_file):
@@ -73,6 +69,7 @@ def load_model_wrapper(model_file):
     return model
 
 def fetch_peak_predictions(model, peaks, input_len, genome_fasta, batch_size, debug_mode=False, lite=False,forward_only=False):
+    peak_ids = []
     pred_counts = []
     pred_profiles = []
     if not forward_only:
@@ -87,7 +84,7 @@ def fetch_peak_predictions(model, peaks, input_len, genome_fasta, batch_size, de
                              debug_mode=debug_mode)
 
     for i in tqdm(range(len(peak_gen))):
-        seqs = peak_gen[i]
+        batch_peak_ids, seqs = peak_gen[i]
         revcomp_seq = seqs[:, ::-1, ::-1]
 
         if lite:
@@ -95,7 +92,7 @@ def fetch_peak_predictions(model, peaks, input_len, genome_fasta, batch_size, de
                                          np.zeros((len(seqs), model.output_shape[0][1])),
                                          np.zeros((len(seqs), ))],
                                         verbose=False)
-            
+
             if not forward_only:
                 revcomp_batch_preds = model.predict([revcomp_seq,
                                              np.zeros((len(revcomp_seq), model.output_shape[0][1])),
@@ -108,24 +105,27 @@ def fetch_peak_predictions(model, peaks, input_len, genome_fasta, batch_size, de
 
         batch_preds[1] = np.array([batch_preds[1][i] for i in range(len(batch_preds[1]))])
         pred_counts.extend(np.exp(batch_preds[1]))
-        pred_profiles.extend(np.squeeze(softmax(batch_preds[0])))
-        
+        pred_profiles.extend(np.array(batch_preds[0]))   # np.squeeze(softmax()) to get probability profile
+
         if not forward_only:
             revcomp_batch_preds[1] = np.array([revcomp_batch_preds[1][i] for i in range(len(revcomp_batch_preds[1]))])
             revcomp_counts.extend(np.exp(revcomp_batch_preds[1]))
-            revcomp_profiles.extend(np.squeeze(softmax(revcomp_batch_preds[0])))
+            revcomp_profiles.extend(np.array(revcomp_batch_preds[0]))    # np.squeeze(softmax()) to get probability profile
 
+        peak_ids.extend(batch_peak_ids)
+
+    peak_ids = np.array(peak_ids)
     pred_counts = np.array(pred_counts)
     pred_profiles = np.array(pred_profiles)
-    
+
     if not forward_only:
         revcomp_counts = np.array(revcomp_counts)
         revcomp_profiles = np.array(revcomp_profiles)
         average_counts = np.average([pred_counts,revcomp_counts],axis=0)
         average_profiles = np.average([pred_profiles,revcomp_profiles[:,::-1]],axis=0)
-        return average_counts,average_profiles
+        return peak_ids,average_counts,average_profiles
     else:
-        return pred_counts,pred_profiles
+        return peak_ids,pred_counts,pred_profiles
 
 def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, batch_size, debug_mode=False, lite=False, shuf=False, forward_only=False):
     variant_ids = []
@@ -162,7 +162,7 @@ def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, ba
                                                  np.zeros((len(allele2_seqs), model.output_shape[0][1])),
                                                  np.zeros((len(allele2_seqs), ))],
                                                 verbose=False)
-            
+
             if not forward_only:
                 revcomp_allele1_batch_preds = model.predict([revcomp_allele1_seqs,
                                                      np.zeros((len(revcomp_allele1_seqs), model.output_shape[0][1])),
@@ -183,16 +183,16 @@ def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, ba
         allele2_batch_preds[1] = np.array([allele2_batch_preds[1][i] for i in range(len(allele2_batch_preds[1]))])
         allele1_pred_counts.extend(np.exp(allele1_batch_preds[1]))
         allele2_pred_counts.extend(np.exp(allele2_batch_preds[1]))
-        allele1_pred_profiles.extend(np.squeeze(softmax(allele1_batch_preds[0])))
-        allele2_pred_profiles.extend(np.squeeze(softmax(allele2_batch_preds[0])))
-        
+        allele1_pred_profiles.extend(np.array(allele1_batch_preds[0]))   # np.squeeze(softmax()) to get probability profile
+        allele2_pred_profiles.extend(np.array(allele2_batch_preds[0]))
+
         if not forward_only:
             revcomp_allele1_batch_preds[1] = np.array([revcomp_allele1_batch_preds[1][i] for i in range(len(revcomp_allele1_batch_preds[1]))])
             revcomp_allele2_batch_preds[1] = np.array([revcomp_allele2_batch_preds[1][i] for i in range(len(revcomp_allele2_batch_preds[1]))])
             revcomp_allele1_pred_counts.extend(np.exp(revcomp_allele1_batch_preds[1]))
             revcomp_allele2_pred_counts.extend(np.exp(revcomp_allele2_batch_preds[1]))
-            revcomp_allele1_pred_profiles.extend(np.squeeze(softmax(revcomp_allele1_batch_preds[0])))
-            revcomp_allele2_pred_profiles.extend(np.squeeze(softmax(revcomp_allele2_batch_preds[0])))
+            revcomp_allele1_pred_profiles.extend(np.array(revcomp_allele1_batch_preds[0]))   # np.squeeze(softmax()) to get probability profile
+            revcomp_allele2_pred_profiles.extend(np.array(revcomp_allele2_batch_preds[0]))
 
         variant_ids.extend(batch_variant_ids)
 
@@ -201,7 +201,7 @@ def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, ba
     allele2_pred_counts = np.array(allele2_pred_counts)
     allele1_pred_profiles = np.array(allele1_pred_profiles)
     allele2_pred_profiles = np.array(allele2_pred_profiles)
-    
+
     if not forward_only:
         revcomp_allele1_pred_counts = np.array(revcomp_allele1_pred_counts)
         revcomp_allele2_pred_counts = np.array(revcomp_allele2_pred_counts)
@@ -217,23 +217,33 @@ def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, ba
         return variant_ids, allele1_pred_counts, allele2_pred_counts, \
                allele1_pred_profiles, allele2_pred_profiles
 
-
 def get_variant_scores_with_peaks(allele1_pred_counts, allele2_pred_counts,
                        allele1_pred_profiles, allele2_pred_profiles, pred_counts):
     # logfc = np.log2(allele2_pred_counts / allele1_pred_counts)
-    # jsd = np.array([jensenshannon(x,y) for x,y in zip(allele2_pred_profiles, allele1_pred_profiles)])
+    # jsd = np.array([jensenshannon(x,y,base=2.0) for x,y in zip(allele2_pred_profiles, allele1_pred_profiles)])
 
     logfc, jsd = get_variant_scores(allele1_pred_counts, allele2_pred_counts,
                                     allele1_pred_profiles, allele2_pred_profiles)
-    allele1_percentile = np.array([np.max([np.mean(pred_counts < x), (1/len(pred_counts))]) for x in allele1_pred_counts])
-    allele2_percentile = np.array([np.max([np.mean(pred_counts < x), (1/len(pred_counts))]) for x in allele2_pred_counts])
+    allele1_quantile = np.array([np.max([np.mean(pred_counts < x), (1/len(pred_counts))]) for x in allele1_pred_counts])
+    allele2_quantile = np.array([np.max([np.mean(pred_counts < x), (1/len(pred_counts))]) for x in allele2_pred_counts])
 
-    return logfc, jsd, allele1_percentile, allele2_percentile
+    return logfc, jsd, allele1_quantile, allele2_quantile
 
 def get_variant_scores(allele1_pred_counts, allele2_pred_counts,
                        allele1_pred_profiles, allele2_pred_profiles):
+
+    print('allele1_pred_counts shape:', allele1_pred_counts.shape)
+    print('allele2_pred_counts shape:', allele2_pred_counts.shape)
+    print('allele1_pred_profiles shape:', allele1_pred_profiles.shape)
+    print('allele2_pred_profiles shape:', allele2_pred_profiles.shape)
+
     logfc = np.squeeze(np.log2(allele2_pred_counts / allele1_pred_counts))
-    jsd = np.array([jensenshannon(x,y) for x,y in zip(allele2_pred_profiles, allele1_pred_profiles)])
+    jsd = np.squeeze([jensenshannon(x, y, base=2.0)
+                     for x,y in zip(softmax(allele2_pred_profiles),
+                                    softmax(allele1_pred_profiles))])
+
+    print('logfc shape:', logfc.shape)
+    print('jsd shape:', jsd.shape)
 
     return logfc, jsd
 
@@ -247,7 +257,7 @@ def adjust_indel_jsd(variants_table,allele1_pred_profiles,allele2_pred_profiles,
             allele2 = ""
         if len(allele1) != len(allele2):
             indel_idx += [i]
-            
+
     adjusted_jsd = []
     for i in indel_idx:
         row = variants_table.iloc[i]
@@ -256,7 +266,7 @@ def adjust_indel_jsd(variants_table,allele1_pred_profiles,allele2_pred_profiles,
             allele1 = ""
         if allele2 == "-":
             allele2 = ""
-            
+
         allele1_length = len(allele1)
         allele2_length = len(allele2)
 
@@ -281,15 +291,15 @@ def adjust_indel_jsd(variants_table,allele1_pred_profiles,allele2_pred_profiles,
         adjusted_allele1_p = adjusted_allele1_p/np.sum(adjusted_allele1_p)
         adjusted_allele2_p = adjusted_allele2_p/np.sum(adjusted_allele2_p)
         assert len(adjusted_allele1_p) == len(adjusted_allele2_p)
-        adjusted_j = jensenshannon(adjusted_allele1_p,adjusted_allele2_p) 
+        adjusted_j = jensenshannon(adjusted_allele1_p,adjusted_allele2_p,base=2.0)
         adjusted_jsd += [adjusted_j]
-    
+
     adjusted_jsd_list = original_jsd.copy()
     if len(indel_idx) > 0:
         for i in range(len(indel_idx)):
             idx = indel_idx[i]
             adjusted_jsd_list[idx] = adjusted_jsd[i]
-        
+
     return indel_idx, adjusted_jsd_list
 
 
@@ -308,8 +318,8 @@ def load_variant_table(table_path, schema=None):
         variants_table['pos'] = variants_table['pos'] + 1
     return variants_table
 
-def create_shuffle_table(variants_table,random_seed=None,total_shuf=None, num_shuf=None):
-    if total_shuf:
+def create_shuffle_table(variants_table, random_seed=None, total_shuf=None, num_shuf=None):
+    if total_shuf != None:
         if len(variants_table) > total_shuf:
             shuf_variants_table = variants_table.sample(total_shuf,
                                                         random_state=random_seed,
@@ -319,10 +329,10 @@ def create_shuffle_table(variants_table,random_seed=None,total_shuf=None, num_sh
             shuf_variants_table = variants_table.sample(total_shuf,
                                                         random_state=random_seed,
                                                         ignore_index=True,
-                                                        replace=True) 
+                                                        replace=True)
         shuf_variants_table['random_seed'] = np.random.permutation(len(shuf_variants_table))
     else:
-        if num_shuf:
+        if num_shuf != None:
             total_shuf = len(variants_table) * num_shuf
             shuf_variants_table = variants_table.sample(total_shuf,
                                                         random_state=random_seed,
@@ -354,6 +364,35 @@ def get_pvals(obs, bg, tail):
 
 def geo_mean_overflow(iterable,axis=0):
     return np.exp(np.log(iterable).mean(axis=0))
+
+def add_missing_columns_to_peaks_df(peaks, schema):
+    if schema != 'narrowpeak':
+        raise ValueError("Schema not supported")
+    
+    required_columns = get_peak_schema(schema)
+    num_current_columns = peaks.shape[1]
+    
+    if num_current_columns == 10:
+        peaks.columns = required_columns[:num_current_columns]
+        return peaks  # No missing columns, return as is
+
+    elif num_current_columns < 3:
+        raise ValueError("Peaks dataframe has fewer than 3 columns, which is invalid")
+    
+    elif num_current_columns > 10:
+        raise ValueError("Peaks dataframe has greater than 10 columns, which is invalid")
+    
+    # Add missing columns to reach a total of 10 columns
+    peaks.columns = required_columns[:num_current_columns]
+    columns_to_add = required_columns[num_current_columns:]
+    
+    for column in columns_to_add:
+        peaks[column] = '.'
+    
+    # Calculate the summit column
+    peaks['summit'] = (peaks['end'] - peaks['start']) // 2
+    
+    return peaks
 
 def get_score_output_file_prefix(scoring_output_dir, sample_name, model_index, is_filter_step=False):
     res = f"{os.path.join(scoring_output_dir, sample_name)}.{model_index}"
