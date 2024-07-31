@@ -92,7 +92,7 @@ class JoinTSVsAction(argparse.Action):
         join_args = []
 
         if len(values) % 3 != 0:
-            raise argparse.ArgumentError(self, f"Must provide 3 arguments per TSV: <TSV1> <LABEL1> <DIRECTION1> <TSV2> <LABEL2> <DIRECTION2> ...; you provided {len(values)} arguments: {values}")
+            raise argparse.ArgumentError(self, f"Must provide 3 arguments per TSV: <TS1> <LABEL1> <DIRECTION1> <TSV2> <LABEL2> <DIRECTION2> ...; you provided {len(values)} arguments: {values}")
         for i in range(0, len(values), 3):
             tsv_file = values[i]
             label = values[i + 1]
