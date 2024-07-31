@@ -7,9 +7,9 @@ scoring_args = {
     ("-l", "--variant-list"): { "type": str, "help": "a TSV file containing a list of variants to score.", "required": True},
     ("-g", "--genome"): {"type": str, "help": "Genome fasta.", "required": True},
     ("-m", "--models"): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
-    ("-scout", "--scoring-output-dir"): {"type": str, "help": "The directory to store all output files like: <output-dir>/<sample-name>.<index>.variant_scores.tsv; directory should already exist.", "required": True},
+    ("-scdir", "--scoring-dir"): {"type": str, "help": "The directory to store scoring files. Used in this way: <scoring-dir>/<model-name>/fold_<index>.variant_scores.tsv. Directory should already exist.", "required": True},
     ("-s", "--chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes", "required": True},
-    ("-sa", "--sample-name"): {"type": str, "help": "The prefix that will be prepended to the filename like: <output-dir>/<sample-name>.<index>.variant_scores.tsv", "required": True},
+    ("-mn", "--model-name"): {"type": str, "help": "The prefix that will be prepended to the filename like: <subcommand-dir>/<model-name>/fold_<index>.variant_scores.tsv", "required": True},
     ("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
     ("-ps", "--peak-chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes for peak genome."},
     ("-pg", "--peak-genome"): {"type": str, "help": "Genome fasta for peaks."},
@@ -27,16 +27,16 @@ scoring_args = {
     ("-nc", "--num-chunks"): {"type": int, "default": 10, "help": "Number of chunks to divide SNP file into."},
     ("-fo", "--forward-only"): {"action": "store_true", "help": "Run variant scoring only on forward sequence."},
     ("-st", "--shap-type"): {"nargs": '+', "default": ["counts"], "help": "Specify shap value type(s) to calculate."},
-    ("-scf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
+    ("-scf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-dir>/<score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 }
 
 summary_args = {
-    ("-scout", "--scoring-output-dir"): {"type": str, "help": "The directory to store all output files like: <output-dir>/<sample-name>.<index>.variant_scores.tsv; directory should already exist.", "required": True},
-    ("-suout", "--summary-output-dir"): { "type": str, "help": "The directory to store the summary file with average scores across folds; directory should already exist." , "required": True},
-    ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename, like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
+    ("-scdir", "--scoring-dir"): {"type": str, "help": "The directory to store scoring files. Used in this way: <scoring-dir>/<model-name>/fold_<index>.variant_scores.tsv. Directory should already exist.", "required": True},
+    ("-fsdir", "--folds-summarization-dir"): { "type": str, "help": "The directory to store the summary file with average scores across folds. Used in this way: <folds-summarization-dir>/<model-name>/variant_scores.tsv. Directory should already exist.", "required": True},
+    ("-mn", "--model-name"): {"type": str, "help": "The prefix to be prepended to the filename, like: <subcommand-dir>/<model-name>/fold_<index>.variant_scores.tsv.", "required": True},
     ("-sc", "--schema"): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
-    ("-scf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files to be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
+    ("-scf", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files to be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-dir>/<score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
     ("-m", "--models"): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided."},
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 }
@@ -110,9 +110,9 @@ class JoinTSVsAction(argparse.Action):
 
 
 annotation_args = {
-    ("-suout", "--summary-output-dir"): { "type": str, "help": "The directory to store the summary file with average scores across folds like so: <annotation-output-dir>/<sample-name>.annotations.tsv; directory should already exist." , "required": True},
-    ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
-    ("-aout", "--annotation-output-dir"): { "type": str, "help": "The directory to store the unfiltered annotations file like so: <annotation-output-dir>/<sample-name>.annotations.tsv. This directory should already exist.", "required": True},
+    ("-fsdir", "--folds-summarization-dir"): { "type": str, "help": "The directory to store the summary file with average scores across folds. Used in this way: <folds-summarization-dir>/<model-name>/variant_scores.tsv. Directory should already exist.", "required": True},
+    ("-mn", "--model-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <subcommand-dir>/<model-name>/fold_<index>.variant_scores.tsv.", "required": True},
+    ("-adir", "--annotation-dir"): { "type": str, "help": "The directory to store the unfiltered annotations file like so: <annotation-dir>/<model-name>/annotations.tsv. This directory should already exist.", "required": True},
     ("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
     ("-p", "--peaks"): { "type": str, "help": "Adds overlapping peaks information. Bed file containing peak regions."},
     ("-ce", "--add-n-closest-elements"): { "nargs": '+', "metavar": ('BED1 COUNT1 LABEL1', 'BED2 COUNT2 LABEL2'), "action": ClosestElementsAction, "help": "Adds variant annotations for the N closest elements (such as genes) and their distances to the variant. Takes in (1) a bed file containing gene regions, (2) number of closest genes, and (3) output an optional label. For example, `--add-closest-elements hg38.genes.bed 5 gene hg38.lnRNA.bed 3 lnRNA` will output 5`closest_gene_i` and `closest_gene_i_distance` columns, as well as 3 `closest_lnRNA_i` and `closest_lnRNA_i_distance` columns.", "default": False },
@@ -125,9 +125,9 @@ annotation_args = {
 }
 
 filter_args = {
-    ("-aout", "--annotation-output-dir"): { "type": str, "help": "The directory to store the unfiltered annotations file like so: <annotation-output-dir>/<sample-name>.annotations.tsv. This directory should already exist.", "required": True},
-    ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
-    ("-fout", "--filter-output-dir"): {"type": str, "help": "The directory to store the filtered annotations file like so: <filter-output-dir>/<sample-name>.annotations.filtered.tsv. This directory should already exist.", "required": True},
+    ("-adir", "--annotation-dir"): { "type": str, "help": "The directory to store the unfiltered annotations file like so: <annotation-dir>/<model-name>/annotations.tsv. This directory should already exist.", "required": True},
+    ("-mn", "--model-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <subcommand-dir>/<model-name>/fold_<index>.variant_scores.tsv.", "required": True},
+    ("-fdir", "--filter-dir"): {"type": str, "help": "The directory to store the filtered annotations file like so: <filter-dir>/<model-name>/annotations.filtered.tsv. This directory should already exist.", "required": True},
     ("-lo", "--filter-lower"): {"type": str, "nargs": "+", "help": "Removes all variants from the annotations list containing a field(s) with a value greater than or equal to the specified threshold(s). This flag accepts a list of pairs, where each pair contains the field and value delimited by a colon. By default this flag is set to `-lo abs_logfc.mean.pval:0.01 jsd.mean.pval:0.01`", "default": ["abs_logfc.mean.pval:0.01", "jsd.mean.pval:0.01"]},
     ("-up", "--filter-upper"): {"type": str, "nargs": "+", "help": "Removes all variants from the annotations list containing a field(s) with a value lower than or equal to the specified threshold(s). This flag accepts a list of pairs, where each pair contains the field and value delimited by a colon. An example of this flag would be: `-up field1:0.5 field2:0.1`."},
     ("-fl", "--filter-logic"): {"type": str, "choices": ["and", "or"], "default": "and", "help": "The logic to use when filtering variants based on the filter-lower and filter-upper flags, excluding --max-percentile-threshold and --peak-variants-only, which always use 'and' logic. The default is 'and', which means that a variant will be removed if it fails any of the filter conditions. If set to 'or', a variant will be removed if it fails all of the filter conditions."},
@@ -138,11 +138,11 @@ filter_args = {
 }
 
 shap_args = {
-    # ("-aout", "--annotation-output-dir"): { "type": str, "help": "The directory to store the annotations file like so: <annotation-output-dir>/<sample-name>.annotations.tsv. This directory should already exist.", "required": True},
-    ("-fout", "--filter-output-dir"): {"type": str, "help": "The directory to store the filtered annotations file like so: <filter-output-dir>/<sample-name>.annotations.filtered.tsv. This directory should already exist.", "required": True},
-    ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
-    # ("-t", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-output-dir>/<file> for each file in the list. Generally only needed if --no-scoring is used."},
-    ("-shout", "--shap-output-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script. This directory should already exist.", "required": True},
+    # ("-adir", "--annotation-dir"): { "type": str, "help": "The directory to store the annotations file like so: <annotation-dir>/<model-name>/annotations.tsv. This directory should already exist.", "required": True},
+    ("-fdir", "--filter-dir"): {"type": str, "help": "The directory to store the filtered annotations file like so: <filter-dir>/<model-name>/annotations.filtered.tsv. This directory should already exist.", "required": True},
+    ("-mn", "--model-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <subcommand-dir>/<model-name>/fold_<index>.variant_scores.tsv.", "required": True},
+    # ("-t", "--score-filenames"): { "nargs": '+', "help": "A list of file names of variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <scoring-dir>/<file> for each file in the list. Generally only needed if --no-scoring is used."},
+    ("-shdir", "--shap-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script. Used like: <shap-dir>/<model-name>/annotations.filtered.tsv. This directory should already exist.", "required": True},
     ("-g", "--genome"): { "type": str, "help": "Genome fasta." , "required": True},
     ("-m", "--models"): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
     ("-s", "--chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes.", "required": True},
@@ -151,7 +151,7 @@ shap_args = {
     ("-dm", "--debug-mode"): { "action": "store_true", "help": "Display allele input sequences."},
     ("-bs", "--batch-size"): { "type": int, "default": 10000, "help": "Batch size to use for the model."},
     ("-c", "--chrom"): { "type": str, "help": "Only score SNPs in selected chromosome."},
-    ("-shf", "--shap-filenames"): { "nargs": '+', "help": "A list of file names of shap files to be used to overwrite the otherwise generated index filenames, and will be used like so: <shap-output-dir>/<shap-filename>.{h5,bw} for each file in the list."},
+    ("-shf", "--shap-filenames"): { "nargs": '+', "help": "A list of file names of shap files to be used to overwrite the otherwise generated index filenames, and will be used like so: <shap-dir>/<shap-filename>.{h5,bw} for each file in the list."},
     ("-st", "--shap-type"): { "nargs": '+', "default": ["counts"], "help": "Specify shap value type(s) to calculate." },
     ("--no-hdf5",): {"action": "store_true", "help": "Prevents saving detailed predictions in hdf5 file during storing, and using those files during the shap and viz steps. Recommended when the variants list is large (>1,000,000)."},
     ("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
@@ -160,11 +160,11 @@ shap_args = {
 viz_args = {
     ("-l", "--variant-list"): { "type": str, "help": "a TSV file containing a list of variants to score.", "required": True},
     ("-m", "--models"): {"type": str, "nargs": '+', "help": "ChromBPNet models to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
-    ("-sa", "--sample-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <output-dir>/<sample-name>.<index>.variant_scores.tsv.", "required": True},
-    ("-fout", "--filter-output-dir"): {"type": str, "help": "The directory to store the filtered annotations file like so: <filter-output-dir>/<sample-name>.annotations.filtered.tsv. This directory should already exist.", "required": True},
-    ("-shout", "--shap-output-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script. This directory should already exist.", "required": True},
-    ("-vout", "--viz-output-dir"): {"type": str, "help": "The directory that will store the visualization outputs. This directory should already exist.", "required": True},
-    ("-fscf", "--filter-score-filenames"): { "nargs": '+', "help": "A list of file names of filtered variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <filter-output-dir>/<filtered-score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
+    ("-mn", "--model-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <subcommand-dir>/<model-name>/fold_<index>.variant_scores.tsv.", "required": True},
+    ("-fdir", "--filter-dir"): {"type": str, "help": "The directory to store the filtered annotations file like so: <filter-dir>/<model-name>/annotations.filtered.tsv. This directory should already exist.", "required": True},
+    ("-shdir", "--shap-dir"): { "type": str, "help": "The directory that will store the SNP effect score predictions from the script. Used like: <shap-dir>/<model-name>/annotations.filtered.tsv. This directory should already exist.", "required": True},
+    ("-vdir", "--viz-dir"): {"type": str, "help": "The directory that will store the visualization outputs. This directory should already exist.", "required": True},
+    ("-fscf", "--filter-score-filenames"): { "nargs": '+', "help": "A list of file names of filtered variant score files that will be used to overwrite the otherwise generated index filenames, and will be used like so: <filter-dir>/<filtered-score-filename>.{tsv,h5} for each file in the list. Generally only needed if --no-scoring is used."},
     # ("--no-hdf5",): {"action": "store_true", "help": "Prevents saving detailed predictions in hdf5 file during storing, and using those files during the shap and viz steps. Recommended when the variants list is large (>1,000,000)."},
     ("-st", "--shap-type"): { "nargs": '+', "default": ["counts"], "help": "Specify shap value type(s) to calculate." },
     ("-predo", "--predictions-override"): { "type": str, "help": "The name of the variant effect predictions' file. Use this if you want to use a name other than the default."},
@@ -262,7 +262,7 @@ def fetch_main_parser():
         included_modules.append("filter")
         # Also include (a copy of) scoring args here (but without the required scoring output dir), as it'll be re-run for the filter step.
         scoring_args_copy = scoring_args.copy()
-        scoring_args_copy.pop(("-scout", "--scoring-output-dir"))
+        scoring_args_copy.pop(("-scdir", "--scoring-dir"))
         scoring_args_copy.pop(("--no-hdf5",))
         args_dict.update(scoring_args_copy)
 

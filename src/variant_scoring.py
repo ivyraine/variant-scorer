@@ -6,23 +6,23 @@ from utils import argmanager
 from utils.helpers import *
 import logging
 
-def main(args = None, filter_output_dir_override = None, filtered_variants_df_override = None):
+def main(args = None, filter_dir_override = None, filtered_variants_df_override = None):
     if args is None:
         args = argmanager.fetch_scoring_args()
         logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                             format='%(asctime)s - %(levelname)s - %(message)s')
 
     output_dir = None
-    if filter_output_dir_override is not None:
-        output_dir = filter_output_dir_override
-    elif not os.path.isdir(args.scoring_output_dir):
+    if filter_dir_override is not None:
+        output_dir = filter_dir_override
+    elif not os.path.isdir(args.scoring_dir):
         raise OSError(f"Output directory ({output_dir}) does not exist or is not a directory")
     else:
-        output_dir = args.scoring_output_dir
+        output_dir = args.scoring_dir
 
     is_using_result_filename_overrides = False
-    is_filter_step = filter_output_dir_override is not None
-    scoring_output_prefixes = [ get_score_output_file_prefix(output_dir, args.sample_name, index, is_filter_step=is_filter_step) for index in range(len(args.models)) ]
+    is_filter_step = filter_dir_override is not None
+    scoring_output_prefixes = [ get_score_output_file_prefix(output_dir, args.model_name, index, is_filter_step=is_filter_step) for index in range(len(args.models)) ]
     if args.score_filenames is not None:
         if len(args.score_filenames) != len(args.models):
             raise ValueError("Number of models and score filenames do not match, which they are requird to do if the --score-filenames flag is given. Exiting.")
@@ -338,7 +338,7 @@ def main(args = None, filter_output_dir_override = None, filtered_variants_df_ov
         variants_table.to_csv(output_tsv, sep="\t", index=False)
 
         # store predictions at variants
-        if hasattr(args, "no_hdf5") and not args.no_hdf5 or filter_output_dir_override is not None:
+        if hasattr(args, "no_hdf5") and not args.no_hdf5 or filter_dir_override is not None:
             output_h5 = f"{scoring_output_prefix}.variant_predictions.h5"
             if is_using_result_filename_overrides:
                 output_h5 = f"{scoring_output_prefix}.h5"

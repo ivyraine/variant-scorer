@@ -26,23 +26,23 @@ def main(args = None):
         logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                             format='%(asctime)s - %(levelname)s - %(message)s')
 
-    if not os.path.isdir(args.shap_output_dir):
-        raise OSError(f"Output directory ({args.shap_output_dir}) does not exist")
+    if not os.path.isdir(args.shap_dir):
+        raise OSError(f"Output directory ({args.shap_dir}) does not exist")
 
-    shap_output_prefixes = [ get_shap_output_file_prefix(args.shap_output_dir, args.sample_name, index) for index in range(len(args.models)) ]
+    shap_output_prefixes = [ get_shap_output_file_prefix(args.shap_dir, args.model_name, index) for index in range(len(args.models)) ]
     is_using_file_overrides = False
     if args.shap_filenames is not None:
         if len(args.shap_filenames) != len(args.models):
             raise ValueError("Number of models and shap filenames do not match, which they are requird to do if the --shap-filenames flag is given. Exiting.")
         else:
-            shap_output_prefixes = [ os.path.join(args.shap_output_dir, args.shap_filenames[i]) for i in range(len(args.models)) ]
+            shap_output_prefixes = [ os.path.join(args.shap_dir, args.shap_filenames[i]) for i in range(len(args.models)) ]
             is_using_file_overrides = True
 
     model_and_output_prefixes = list(zip(args.models, shap_output_prefixes))
 
     for model_index, (model_name, shap_output_prefix) in enumerate(model_and_output_prefixes):
         model = load_model_wrapper(model_name)
-        filtered_annotations_file = get_filter_output_file(args.filter_output_dir, args.sample_name)
+        filtered_annotations_file = get_filter_output_file(args.filter_dir, args.model_name)
         # variants_table = load_variant_table(filtered_annotations_file, args.schema)
         variants_table = load_variant_table(filtered_annotations_file, None)
         variants_table = variants_table.fillna('-')
@@ -74,7 +74,7 @@ def main(args = None):
             batch_size=args.batch_size
             ### set the batch size to the length of variant table in case variant table is small to avoid error
             batch_size=min(batch_size,len(variants_table))
-            # output_file=h5py.File(''.join([args.shap_output_dir, ".variant_shap.%s.h5"%shap_type]), 'w')
+            # output_file=h5py.File(''.join([args.shap_dir, ".variant_shap.%s.h5"%shap_type]), 'w')
             # observed = output_file.create_group('observed')
             # allele1_write = observed.create_dataset('allele1_shap', (len(variants_table),2114,4), chunks=(batch_size,2114,4), dtype=np.float16, compression='gzip', compression_opts=9)
             # allele2_write = observed.create_dataset('allele2_shap', (len(variants_table),2114,4), chunks=(batch_size,2114,4), dtype=np.float16, compression='gzip', compression_opts=9)
@@ -153,7 +153,7 @@ def main(args = None):
                     variant_ids = np.concatenate((variant_ids, var_ids))
 
             # # store shap at variants
-            # with h5py.File(''.join([args.shap_output_dir, ".variant_shap.%s.h5"%shap_type]), 'w') as f:
+            # with h5py.File(''.join([args.shap_dir, ".variant_shap.%s.h5"%shap_type]), 'w') as f:
             #     observed = f.create_group('observed')
             #     observed.create_dataset('allele1_shap', data=allele1_shap, compression='gzip', compression_opts=9)
             #     observed.create_dataset('allele2_shap', data=allele2_shap, compression='gzip', compression_opts=9)

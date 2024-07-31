@@ -17,7 +17,7 @@ def main(args = None):
                             format='%(asctime)s - %(levelname)s - %(message)s')
         args = fetch_filter_args()
 
-    input_file = get_annotation_output_file(args.annotation_output_dir, args.sample_name)
+    input_file = get_annotation_output_file(args.annotation_output_dir, args.model_name)
 
     df = pd.read_csv(input_file, sep="\t")
     existing_headers = df.columns
@@ -70,7 +70,7 @@ def main(args = None):
         logging.warning(f"No variants remain after filtering. Exiting.")
         exit(1)
 
-    out_file = f"{get_filter_output_file(args.filter_output_dir, args.sample_name)}"
+    out_file = f"{get_filter_output_file(args.filter_output_dir, args.model_name)}"
     filtered_variants.to_csv(out_file,\
                   sep="\t",\
                   index=False)

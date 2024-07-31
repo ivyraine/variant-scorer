@@ -142,23 +142,23 @@ def main(args = None):
         args = fetch_viz_args()
 
     is_using_scoring_file_overrides = False
-    filter_output_filenames = [ get_score_output_file_prefix(args.filter_output_dir, args.sample_name, index, is_filter_step=True) for index in range(len(args.models)) ]
+    filter_output_filenames = [ get_score_output_file_prefix(args.filter_dir, args.model_name, index, is_filter_step=True) for index in range(len(args.models)) ]
     print(filter_output_filenames)
     if args.filter_score_filenames is not None:
         if len(args.filter_score_filenames) != len(args.models):
             raise ValueError("Number of models and score filenames do not match, which they are requird to do if the --score-filenames flag is given. Exiting.")
         else:
-            filter_output_filenames = [ os.path.join(args.filter_output_dir, args.filter_score_filenames[i]) for i in range(len(args.models)) ]
+            filter_output_filenames = [ os.path.join(args.filter_dir, args.filter_score_filenames[i]) for i in range(len(args.models)) ]
             is_using_scoring_file_overrides = True
     scoring_model_and_output_prefixes = list(zip(args.models, filter_output_filenames))
 
     is_using_shap_file_overrides = False
-    shap_output_names = [ get_shap_output_file_prefix(args.shap_output_dir, args.sample_name, index) for index in range(len(args.models)) ]
+    shap_output_names = [ get_shap_output_file_prefix(args.shap_dir, args.model_name, index) for index in range(len(args.models)) ]
     if args.filter_score_filenames is not None:
         if len(args.filter_score_filenames) != len(args.models):
             raise ValueError("Number of models and score filenames do not match, which they are requird to do if the --score-filenames flag is given. Exiting.")
         else:
-            shap_output_names = [ os.path.join(args.shap_output_dir, args.filter_score_filenames[i]) for i in range(len(args.models)) ]
+            shap_output_names = [ os.path.join(args.shap_dir, args.filter_score_filenames[i]) for i in range(len(args.models)) ]
             is_using_shap_file_overrides = True
     shap_model_and_output_prefixes = list(zip(args.models, shap_output_names))
 
@@ -233,7 +233,7 @@ def main(args = None):
     allele2_shap[shap_type]['mean'] = np.mean(np.array([allele2_shap[shap_type][model_index] for model_index in range(total_models)]), axis=0)
 
     # Load the filtered annotations file
-    annotations_filename = get_filter_output_file(args.filter_output_dir, args.sample_name)
+    annotations_filename = get_filter_output_file(args.filter_dir, args.model_name)
     annotations_df = pd.read_csv(annotations_filename, sep="\t")
 
     for index, annotation in annotations_df.iterrows():

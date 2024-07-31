@@ -16,12 +16,12 @@ def main(args = None):
 
         args = fetch_annotation_args()
 
-    variant_scores_file = get_summary_output_file(args.summary_output_dir, args.sample_name)
+    variant_scores_file = get_summary_output_file(args.summary_dir, args.model_name)
     peak_path = args.peaks
 
     variant_scores = pd.read_table(variant_scores_file)
     # TODO use os temp instead.
-    # tmp_bed_file_path = f"/tmp/{args.sample_name}.variant_table.tmp.bed"
+    # tmp_bed_file_path = f"/tmp/{args.model_name}.variant_table.tmp.bed"
 
     variant_scores_bed_format = None
     if args.schema == "bed":
@@ -69,7 +69,7 @@ def main(args = None):
 
     logging.info(f"Final annotation table:\n{variant_scores.shape}\n{variant_scores.head()}")
 
-    out_file = get_annotation_output_file(args.annotation_output_dir, args.sample_name)
+    out_file = get_annotation_output_file(args.annotation_dir, args.model_name)
     variant_scores.to_csv(out_file,\
                           sep="\t",\
                           index=False)
