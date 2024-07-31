@@ -401,23 +401,35 @@ def add_missing_columns_to_peaks_df(peaks, schema):
     
     return peaks
 
-def get_score_output_file_prefix(score_dir, sample_name, model_index, is_filter_step=False):
-    res = f"{os.path.join(score_dir, sample_name)}.{model_index}"
-    if is_filter_step:
-        res += ".filtered"
-    return res
+def get_score_dir(score_dir, model_name, fold):
+    return os.path.join(score_dir, model_name, f'fold_{fold}')
 
-def get_summary_output_file(summary_dir, sample_name):
-    return f"{os.path.join(summary_dir, sample_name)}.mean.variant_scores.tsv"
+def get_score_file_path(score_dir, model_name, fold, chr=None):
+    if chr is None:
+        return os.path.join(get_score_dir(score_dir, model_name, fold), 'variant_scores.tsv')
+    else:
+        return os.path.join(get_score_dir(score_dir, model_name, fold), f'chr{str(chr)}.variant_scores.tsv')
+    
+def get_score_peaks_path(score_dir, model_name, fold):
+    return os.path.join(get_score_dir(score_dir, model_name, fold), 'peak_scores.tsv')
 
-def get_annotation_output_file(annotate_dir, sample_name):
-    return f"{os.path.join(annotate_dir, sample_name)}.annotations.tsv"
+def get_score_shuffled_path(score_dir, model_name, fold):
+    return os.path.join(get_score_dir(score_dir, model_name, fold), 'variant_scores.shuffled.tsv')
 
-def get_filter_output_file(annotate_dir, sample_name):
-    return f"{os.path.join(annotate_dir, sample_name)}.annotations.filtered.tsv"
+def get_profiles_file_path(score_dir, model_name, fold):
+    return os.path.join(get_score_dir(score_dir, model_name, fold), 'variant_predictions.tsv')
 
-def get_shap_output_file_prefix(shap_dir, sample_name, model_index):
-    return f"{os.path.join(shap_dir, sample_name)}.{model_index}"
+def get_summarize_output_file(summary_dir, model_name):
+    return f"{os.path.join(summary_dir, model_name)}.mean.variant_scores.tsv"
+
+def get_annotate_output_file(annotate_dir, model_name):
+    return f"{os.path.join(annotate_dir, model_name)}.annotations.tsv"
+
+def get_filter_output_file(annotate_dir, model_name):
+    return f"{os.path.join(annotate_dir, model_name)}.annotations.filtered.tsv"
+
+def get_shap_output_file_prefix(shap_dir, model_name, model_index):
+    return f"{os.path.join(shap_dir, model_name)}.{model_index}"
 
 def add_n_closest_elements_inplace(variant_scores: pd.DataFrame, closest_n_elements_args: List[Tuple[str, int, str]], bed_headers: List[str]):
     # Add closest elements to the variant_scores dataframe.

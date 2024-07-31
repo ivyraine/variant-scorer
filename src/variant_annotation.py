@@ -16,7 +16,7 @@ def main(args = None):
 
         args = fetch_annotation_args()
 
-    variant_scores_file = get_summary_output_file(args.summary_dir, args.model_name)
+    variant_scores_file = get_summarize_output_file(args.summary_dir, args.model_name)
     peak_path = args.peaks
 
     variant_scores = pd.read_table(variant_scores_file)
@@ -69,7 +69,7 @@ def main(args = None):
 
     logging.info(f"Final annotation table:\n{variant_scores.shape}\n{variant_scores.head()}")
 
-    out_file = get_annotation_output_file(args.annotate_dir, args.model_name)
+    out_file = get_annotate_output_file(args.annotate_dir, args.model_name)
     variant_scores.to_csv(out_file,\
                           sep="\t",\
                           index=False)

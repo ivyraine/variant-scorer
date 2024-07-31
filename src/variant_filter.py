@@ -17,7 +17,7 @@ def main(args = None):
                             format='%(asctime)s - %(levelname)s - %(message)s')
         args = fetch_filter_args()
 
-    input_file = get_annotation_output_file(args.annotation_output_dir, args.model_name)
+    input_file = get_annotate_output_file(args.annotation_output_dir, args.model_name)
 
     df = pd.read_csv(input_file, sep="\t")
     existing_headers = df.columns

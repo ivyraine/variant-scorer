@@ -142,7 +142,7 @@ def main(args = None):
         args = fetch_viz_args()
 
     is_using_scoring_file_overrides = False
-    filter_output_filenames = [ get_score_output_file_prefix(args.filter_dir, args.model_name, index, is_filter_step=True) for index in range(len(args.models)) ]
+    filter_output_filenames = [ get_score_file_path(args.filter_dir, args.model_name, index, is_filter_step=True) for index in range(len(args.models)) ]
     print(filter_output_filenames)
     if args.filter_score_filenames is not None:
         if len(args.filter_score_filenames) != len(args.models):
