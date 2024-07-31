@@ -69,7 +69,7 @@ def main(args = None):
 
     logging.info(f"Final annotation table:\n{variant_scores.shape}\n{variant_scores.head()}")
 
-    out_file = get_annotation_output_file(args.annotation_dir, args.model_name)
+    out_file = get_annotation_output_file(args.annotate_dir, args.model_name)
     variant_scores.to_csv(out_file,\
                           sep="\t",\
                           index=False)

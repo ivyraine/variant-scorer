@@ -15,10 +15,10 @@ def main(args = None, filter_dir_override = None, filtered_variants_df_override 
     output_dir = None
     if filter_dir_override is not None:
         output_dir = filter_dir_override
-    elif not os.path.isdir(args.scoring_dir):
+    elif not os.path.isdir(args.score_dir):
         raise OSError(f"Output directory ({output_dir}) does not exist or is not a directory")
     else:
-        output_dir = args.scoring_dir
+        output_dir = args.score_dir
 
     is_using_result_filename_overrides = False
     is_filter_step = filter_dir_override is not None

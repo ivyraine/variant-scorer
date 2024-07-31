@@ -401,8 +401,8 @@ def add_missing_columns_to_peaks_df(peaks, schema):
     
     return peaks
 
-def get_score_output_file_prefix(scoring_dir, sample_name, model_index, is_filter_step=False):
-    res = f"{os.path.join(scoring_dir, sample_name)}.{model_index}"
+def get_score_output_file_prefix(score_dir, sample_name, model_index, is_filter_step=False):
+    res = f"{os.path.join(score_dir, sample_name)}.{model_index}"
     if is_filter_step:
         res += ".filtered"
     return res
@@ -410,11 +410,11 @@ def get_score_output_file_prefix(scoring_dir, sample_name, model_index, is_filte
 def get_summary_output_file(summary_dir, sample_name):
     return f"{os.path.join(summary_dir, sample_name)}.mean.variant_scores.tsv"
 
-def get_annotation_output_file(annotation_dir, sample_name):
-    return f"{os.path.join(annotation_dir, sample_name)}.annotations.tsv"
+def get_annotation_output_file(annotate_dir, sample_name):
+    return f"{os.path.join(annotate_dir, sample_name)}.annotations.tsv"
 
-def get_filter_output_file(annotation_dir, sample_name):
-    return f"{os.path.join(annotation_dir, sample_name)}.annotations.filtered.tsv"
+def get_filter_output_file(annotate_dir, sample_name):
+    return f"{os.path.join(annotate_dir, sample_name)}.annotations.filtered.tsv"
 
 def get_shap_output_file_prefix(shap_dir, sample_name, model_index):
     return f"{os.path.join(shap_dir, sample_name)}.{model_index}"
