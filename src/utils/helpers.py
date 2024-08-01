@@ -428,7 +428,7 @@ def get_filter_output_file(annotate_dir, model_name):
 def get_shap_output_file_prefix(shap_dir, model_name, model_index):
     return f"{os.path.join(shap_dir, model_name)}.{model_index}"
 
-def add_n_closest_elements_inplace(variant_scores: pd.DataFrame, closest_n_elements_args: List[Tuple[str, int, str]], bed_headers: List[str]):
+def add_n_closest_elements(variant_scores: pd.DataFrame, closest_n_elements_args: List[Tuple[str, int, str]], bed_headers: List[str]):
     # Add closest elements to the variant_scores dataframe.
     variant_bed = pybedtools.BedTool.from_dataframe(bed_headers)
     for elements_file, n_elements, element_label in closest_n_elements_args:
@@ -466,10 +466,10 @@ def add_n_closest_elements_inplace(variant_scores: pd.DataFrame, closest_n_eleme
                 closest_element_df[f'closest_{element_label}_{i+1}'] = ''
                 closest_element_df[f'closest_{element_label}_{i+1}_distance'] = ''
         variant_scores = variant_scores.merge(closest_element_df, on='variant_id', how='left')
+    return variant_scores
 
 
-
-def add_closest_elements_in_window_inplace(variant_scores: pd.DataFrame, closest_elements_in_window_args: List[Tuple[str, int, str]], bed_headers: List[str]):
+def add_closest_elements_in_window(variant_scores: pd.DataFrame, closest_elements_in_window_args: List[Tuple[str, int, str]], bed_headers: List[str]):
     # Add closest elements within a window to the variant_scores dataframe.
     variant_bed = pybedtools.BedTool.from_dataframe(bed_headers)
     for elements_file, window_size, element_label in closest_elements_in_window_args:
@@ -506,8 +506,10 @@ def add_closest_elements_in_window_inplace(variant_scores: pd.DataFrame, closest
             closest_element_df[f"{element_label}_within_{window_size}_bp"] = ''
 
         variant_scores = variant_scores.merge(closest_element_df[['variant_id', output_label]], on='variant_id', how='left')
+    return variant_scores
 
-def add_r2_inplace(variant_scores: pd.DataFrame, r2_ld_filepath: str):
+
+def add_r2(variant_scores: pd.DataFrame, r2_ld_filepath: str):
     logging.info("Annotating with r2")
     # Make temp
     # r2_tsv_filepath = os
@@ -559,6 +561,8 @@ def add_r2_inplace(variant_scores: pd.DataFrame, r2_ld_filepath: str):
         variant_scores = variant_scores.merge(all_plink_variants,
             on=['variant_id'],
             how='left')
+    return variant_scores
+
 
 def get_asb_adastra(chunk, sig_adastra_tf, sig_adastra_celltype):
     mean_asb_es_tf_ref = []
@@ -600,7 +604,8 @@ def get_asb_adastra(chunk, sig_adastra_tf, sig_adastra_celltype):
     
     return chunk
 
-def add_adastra_inplace(variant_scores: pd.DataFrame, adastra_tf_file: str, adastra_celltype_file: str, threads=DEFAULT_ADASTRA_THREADS):
+
+def add_adastra(variant_scores: pd.DataFrame, adastra_tf_file: str, adastra_celltype_file: str, threads=DEFAULT_ADASTRA_THREADS):
 
     sig_adastra_tf = pd.read_table(adastra_tf_file)
     sig_adastra_celltype = pd.read_table(adastra_celltype_file)
@@ -622,9 +627,23 @@ def add_adastra_inplace(variant_scores: pd.DataFrame, adastra_tf_file: str, adas
     with Pool(processes=n_threads) as pool:
         results = pool.starmap(get_asb_adastra, args_for_starmap)
 
-    variant_scores = pd.concat(results)
+    new_variant_scores = pd.concat(results)
 
     pool.close()
     pool.join()
 
     logging.debug(f"ADASTRA annotations added to variant scores:\n{variant_scores.shape}\n{variant_scores.head()}")
+    return new_variant_scores
+
+
+def add_annot_using_pandas(variant_scores: pd.DataFrame, args):
+    for label, expression in args:
+        # Expose variant_scores as df for the user.
+        variant_scores[label] = variant_scores.eval(expression)
+    return variant_scores
+
+def add_annot_using_python(variant_scores: pd.DataFrame, args):
+    for label, expression in args:
+        # Expose variant_scores as df for the user.
+        variant_scores[label] = eval(expression, None, {'df': variant_scores})
+    return variant_scores

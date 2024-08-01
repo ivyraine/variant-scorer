@@ -3,8 +3,8 @@ import variant_scoring
 import variant_shap
 import variant_summary_across_folds
 import variant_annotation
-import variant_filter
 import variant_viz
+import aggregate
 import sys
 import logging
 
@@ -13,41 +13,56 @@ from os.path import isfile
 
 class ClosestElementsAction(argparse.Action):
 	def __call__(self, parser, namespace, values, option_string=None):
-		if len(values) % 3 != 0:
-			raise argparse.ArgumentError(self, f"Must provide 3 arguments per element type: <BED1> <COUNT1> <LABEL1> <BED2> <COUNT2> <LABEL2> ...; you provided {len(values)} arguments: {values}")
+		# Ensure the attribute exists and is a list
+		if not hasattr(namespace, 'closest_n_elements_args'):
+			setattr(namespace, 'closest_n_elements_args', [])
 		
-		closest_n_elements_args = []
-		for i in range(0, len(values), 3):
-			closest_elements_file = values[i]
-			closest_elements_count = int(values[i + 1])
-			closest_elements_label = values[i + 2]
-			
-			if not isfile(closest_elements_file):
-				parser.error(f"TSV file '{closest_elements_file}' does not exist.")
-			
-			closest_n_elements_args.append((closest_elements_file, closest_elements_count, closest_elements_label))
-			
-		setattr(namespace, "closest_n_elements_args", closest_n_elements_args)
+		closest_elements_file, closest_elements_count, closest_elements_label = values
+		
+		if not isfile(closest_elements_file):
+			parser.error(f"BED file '{closest_elements_file}' does not exist.")
+		
+		# Append the new values as a tuple
+		getattr(namespace, 'closest_n_elements_args').append(
+			(closest_elements_file, int(closest_elements_count), closest_elements_label)
+		)
 		setattr(namespace, self.dest, True)
 
 class ClosestElementsInWindowAction(argparse.Action):
 	def __call__(self, parser, namespace, values, option_string=None):
-		print(len(values))
-		if len(values) % 3 != 0:
-			raise argparse.ArgumentError(self, f"Must provide 3 arguments per element type: <BED1> <SIZE1> <LABEL1> <BED2> <SIZE2> <LABEL2> ...; you provided {len(values)} arguments: {values}")
+		# Ensure the attribute exists and is a list
+		if not hasattr(namespace, 'closest_elements_in_window_args'):
+			setattr(namespace, 'closest_elements_in_window_args', [])
 		
-		closest_n_elements_args = []
-		for i in range(0, len(values), 3):
-			closest_elements_window_file = values[i]
-			closest_elements_window_size = int(values[i + 1])
-			closest_elements_window_label = values[i + 2]
-			
-			if not isfile(closest_elements_window_file):
-				parser.error(f"TSV file '{closest_elements_window_file}' does not exist.")
-			
-			closest_n_elements_args.append((closest_elements_window_file, closest_elements_window_size, closest_elements_window_label))
-			
-		setattr(namespace, "closest_elements_in_window_args", closest_n_elements_args)
+		closest_elements_window_file, closest_elements_window_size, closest_elements_window_label = values
+		
+		if not isfile(closest_elements_window_file):
+			parser.error(f"BED file '{closest_elements_window_file}' does not exist.")
+		
+		# Append the new values as a tuple
+		getattr(namespace, 'closest_elements_in_window_args').append(
+			(closest_elements_window_file, int(closest_elements_window_size), closest_elements_window_label)
+		)
+		setattr(namespace, self.dest, True)
+
+class JoinTSVsAction(argparse.Action):
+	def __call__(self, parser, namespace, values, option_string=None):
+		valid_directions = {'left', 'right', 'inner', 'outer'}
+		
+		# Ensure the attribute exists and is a list
+		if not hasattr(namespace, 'join_args'):
+			setattr(namespace, 'join_args', [])
+		
+		tsv_file, label, direction = values
+		
+		if direction not in valid_directions:
+			parser.error(f"Invalid direction '{direction}'. Valid directions are {valid_directions}.")
+		
+		if not isfile(tsv_file):
+			parser.error(f"TSV file '{tsv_file}' does not exist.")
+		
+		# Append the new values as a tuple
+		getattr(namespace, 'join_args').append((tsv_file, label, direction))
 		setattr(namespace, self.dest, True)
 
 class AdastraAction(argparse.Action):
@@ -56,28 +71,21 @@ class AdastraAction(argparse.Action):
 		setattr(namespace, 'adastra_celltype_file', values[1])
 		setattr(namespace, self.dest, True)
 
-class JoinTSVsAction(argparse.Action):
-	def __call__(self, parser, namespace, values, option_string=None):
-		valid_directions = {'left', 'right', 'inner', 'outer'}
-		join_args = []
 
-		if len(values) % 3 != 0:
-			raise argparse.ArgumentError(self, f"Must provide 3 arguments per TSV: <TS1> <LABEL1> <DIRECTION1> <TSV2> <LABEL2> <DIRECTION2> ...; you provided {len(values)} arguments: {values}")
-		for i in range(0, len(values), 3):
-			tsv_file = values[i]
-			label = values[i + 1]
-			direction = values[i + 2]
-			
-			if direction not in valid_directions:
-				parser.error(f"Invalid direction '{direction}'. Valid directions are {valid_directions}.")
-			
-			if not isfile(tsv_file):
-				parser.error(f"TSV file '{tsv_file}' does not exist.")
-			
-			join_args.append((tsv_file, label, direction))
-		setattr(namespace, "join_args", join_args)
-		setattr(namespace, self.dest, True)
-
+shared_annotate_args = {
+	# TODO rename this since this is not just for bool. also rename to like: add-label-using-pandas
+	("-pd", "--add-annot-using-pandas"): { "nargs": 2, "metavar": ('LABEL', 'EXPRESSION'), "action": "append", "help": '''Generate a new annotation with values equal to the evaluation of a Pandas expression using `pandas.DataFrame.eval(EXPRESSION)`. For example, `--add-annot-using-pandas is_significant "logfc.mean.pval < 0.01) | jsd.mean.pval < 0.01 & active_allele_quantile.mean > 0.05"`. Can be called multiple times to generate multiple annotations.''' },
+	("-py", "--add-annot-using-python"): { "nargs": 2, "metavar": ('LABEL', 'EXPRESSION'), "action": "append", "help": '''Generate a new annotation with values equal to the evaluation of a Python expression using `eval(EXPRESSION)`. For example, `--add-annot-using-python is_significant "((df['logfc.mean.pval'] < 0.01 | (df['jsd.mean.pval'] < 0.01)) & (df['active_allele_quantile.mean'] > 0.05)"`. Can be called multiple times to generate multiple annotations.''' },
+	("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
+	("-p", "--peaks"): { "type": str, "help": "Adds overlapping peaks information. Bed file containing peak regions."},
+	("-ce", "--add-n-closest-elements"): { "nargs": 3, "metavar": ('BED', 'COUNT', 'LABEL'), "action": ClosestElementsAction, "help": "Adds variant annotations for the N closest elements (such as genes) and their distances to the variant. Takes in (1) a bed file containing gene regions, (2) number of closest genes, and (3) output an optional label. Can be used multiple times to generate multiple annotations. For example, `--add-n-closest-elements hg38.genes.bed 5 gene --add-n-closest-elements hg38.lnRNA.bed 3 lnRNA` will output 5`closest_gene_i` and `closest_gene_i_distance` columns, as well as 3 `closest_lnRNA_i` and `closest_lnRNA_i_distance` columns.", "default": False },
+	("-cew", "--add-closest-elements-in-window"): { "nargs": 3, "metavar": ('BED', 'WINDOW_SIZE', 'LABEL'), "action": ClosestElementsInWindowAction, "help": "Add variant annotations for the elements (such as genes) existing up to <WINDOWSIZE> bp away from the variant. Takes in (1) a bed file containing gene regions, (2) the window size, and (3) output an optional label. Can be used multiple times to generate multiple annotations. For example, `--add-closest-elements-in-window hg38.genes.bed 100000 genes` will output genes existing within 100000 bp of each variant to their `genes_within_100000_bp` column.", "default": False },
+	("-aa", "--add-adastra"): { "nargs": 2, "metavar": ('ADASTRA_TF_FILE', 'ADASTRA_CELLTYPE_FILE'), "action": AdastraAction, "help": "Annotate with ADASTRA. Provide ADASTRA TF and cell type data files.", "default": False },
+	("-j", "--join-tsvs"): { "nargs": 3, "metavar": ('TSV', 'LABEL', 'DIRECTION'), "action": JoinTSVsAction, "help": "Add external annotations by joining variant annotations with external TSVs on the specified labels and direction. Valid directions are 'left', 'right', 'inner', 'outer'. Can be used multiple times to generate multiple annotations. For example, `--join-tsvs 1.tsv variant_id left --join-tsvs 2.tsv variant_id outer --join-tsvs 3.tsv hpo left`.", "default": False},
+	("-th", "--threads"): { "type": int, "help": "The maximum amount of threads to use, where possible." },
+	("-r2", "--r2"): { "type": str, "help": "Adds r2 annotations. Requires a PLINK .ld file." },
+	("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
+}
 subcommand_args = {
 	"score": {
 		"help": "Gather variant effect information (i.e. \"scores\") from running variants through ChromBPNet, a chromatin accessibility model.",
@@ -86,7 +94,7 @@ subcommand_args = {
 			("-l", "--variant-list"): { "type": str, "help": "a TSV file containing a list of variants to score.", "required": True},
 			("-g", "--genome"): {"type": str, "help": "Genome fasta.", "required": True},
 			("-m", "--model-path"): {"type": str, "help": "ChromBPNet model to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
-			("-op", "--score-output-path-prefix"): {"type": str, "help": 'A string that will be prefixed to the outputs of the `score` subcommand, to form a valid path to be written to. Should contain information relevant to the project, subcommand, model, and fold, if relevant. Used in this way: "<output-path-prefix><output-file-suffix>". Example usage: `--output-path-prefix /projects/score/adipocytes/fold_0/` will output to paths like /projects/score/adipocytes/fold_0/variant_scores.tsv.', "required": True},
+			("-op", "--score-output-path-prefix"): {"type": str, "help": 'A string that will be prefixed to the outputs of the `score` subcommand, to form a valid path to be written to. Should contain information relevant to the project, subcommand, model, and fold, if relevant. Used in this way: "<output-path-prefix><output-file-suffix>". Example usage: `--score-output-path-prefix /projects/score/adipocytes/fold_0/` will output to paths like /projects/score/adipocytes/fold_0/variant_scores.tsv.', "required": True},
 			("-s", "--chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes", "required": True},
 			("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
 			("-ps", "--peak-chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes for peak genome."},
@@ -113,43 +121,43 @@ subcommand_args = {
 		"function": variant_summary_across_folds.main,
 		"args": {
 			("-i", "--scores-paths"): { "nargs": '+', "help": "A (space-separated) list of variant score file paths (generally, each from a different fold) to be summarized together, generated from the `score` subcommand. Used like so: `--scores-paths /projects/score/adipocytes/fold_0/variant_scores.tsv /projects/score/adipocytes/fold_1/variant_scores.tsv /projects/score/adipocytes/fold_2/variant_scores.tsv ...`."},
-			("-o", "--summarize-output-path"): { "type": str, "help": 'A string representing the output file path of the `summarize` subcommand, to form a valid path to be written to. Should contain information relevant to the project, subcommand, model, and fold, if relevant. Example usage: `--output /projects/summarize/adipocytes/mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/mean.variant_scores.tsv.'},
+			("-o", "--summarize-output-path"): { "type": str, "help": 'A string representing the output file path of the `summarize` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--summarize-output-path /projects/summarize/adipocytes/mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/mean.variant_scores.tsv.'},
 			("-sc", "--schema"): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
 			("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 		},
 	},
 	"annotate": {
-		"help": "Generate useful annotations for each variant.",
+		"help": "Generate useful annotations for each variant. Same capabilities as the `annotate-prio` subcommand, but is named differently for clarity of usage; in particular, you should aim to only generate annotations that you will use in deciding variant prioritization, and generate other annotations in the `annotate-prio` step. It's recommended to keep these annotations minimal for large-scale projects to save on storage space and processing time.",
 		"function": variant_annotation.main,
-		"args": {
-			("-mn", "--model-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <subcommand-dir>/<model-name>/fold_<fold>/variant_scores.tsv.", "required": True},
-			("-adir", "--annotate-dir"): { "type": str, "help": "The directory to store the unfiltered annotations file like so: <annotate-dir>/<model-name>/annotations.tsv. This directory should already exist.", "required": True},
-			("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
-			("-p", "--peaks"): { "type": str, "help": "Adds overlapping peaks information. Bed file containing peak regions."},
-			("-ce", "--add-n-closest-elements"): { "nargs": '+', "metavar": ('BED1 COUNT1 LABEL1', 'BED2 COUNT2 LABEL2'), "action": ClosestElementsAction, "help": "Adds variant annotations for the N closest elements (such as genes) and their distances to the variant. Takes in (1) a bed file containing gene regions, (2) number of closest genes, and (3) output an optional label. For example, `--add-closest-elements hg38.genes.bed 5 gene hg38.lnRNA.bed 3 lnRNA` will output 5`closest_gene_i` and `closest_gene_i_distance` columns, as well as 3 `closest_lnRNA_i` and `closest_lnRNA_i_distance` columns.", "default": False },
-			("-cew", "--add-closest-elements-in-window"): { "nargs": '+', "metavar": ('BED1 SIZE1 LABEL1', 'BED2 SIZE2 LABEL2'), "action": ClosestElementsInWindowAction, "help": "Add variant annotations for the elements (such as genes) existing up to <WINDOWSIZE> bp away from the variant. Takes in (1) a bed file containing gene regions, (2) the window size, and (3) output an optional label. For example, `--add-closest-elements-in-window hg38.genes.bed 100000 genes` will output genes existing within 100000 bp of each variant to their `genes_within_100000_bp` column.", "default": False },
-			("-aa", "--add-adastra"): { "nargs": 2, "metavar": ('ADASTRA_TF_FILE', 'ADASTRA_CELLTYPE_FILE'), "action": AdastraAction, "help": "Annotate with ADASTRA. Provide ADASTRA TF and cell type data files.", "default": False },
-			("-j", "--join-tsvs"): { "nargs": '+', "metavar": ('TSV1 LABEL1 DIRECTION1', 'TSV2 LABEL2 DIRECTION2'), "action": JoinTSVsAction, "help": "Add external annotations by joining variant annotations with external TSVs on the specified labels and direction. Valid directions are 'left', 'right', 'inner', 'outer'. For example, `--join-tsvs 1.tsv variant_id left 2.tsv variant_id outer 3.tsv hpo left`.", "default": False},
-			("-th", "--threads"): { "type": int, "help": "The maximum amount of threads to use, where possible." },
-			("-r2", "--r2"): { "type": str, "help": "Adds r2 annotations. Requires a PLINK .ld file." },
-			("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
-		},
-	},
-	"filter": {
-		"help": "",
-		"function": variant_filter.main,
-		"args": {
-			("-adir", "--annotate-dir"): { "type": str, "help": "The directory to store the unfiltered annotations file like so: <annotate-dir>/<model-name>/annotations.tsv. This directory should already exist.", "required": True},
-			("-mn", "--model-name"): {"type": str, "help": "The prefix to be prepended to the filename like: <subcommand-dir>/<model-name>/fold_<fold>/variant_scores.tsv.", "required": True},
-			("-fdir", "--filter-dir"): {"type": str, "help": "The directory to store the filtered annotations file like so: <filter-dir>/<model-name>/annotations.filtered.tsv. This directory should already exist.", "required": True},
-			("-lo", "--filter-lower"): {"type": str, "nargs": "+", "help": "Removes all variants from the annotations list containing a field(s) with a value greater than or equal to the specified threshold(s). This flag accepts a list of pairs, where each pair contains the field and value delimited by a colon. By default this flag is set to `-lo abs_logfc.mean.pval:0.01 jsd.mean.pval:0.01`", "default": ["abs_logfc.mean.pval:0.01", "jsd.mean.pval:0.01"]},
-			("-up", "--filter-upper"): {"type": str, "nargs": "+", "help": "Removes all variants from the annotations list containing a field(s) with a value lower than or equal to the specified threshold(s). This flag accepts a list of pairs, where each pair contains the field and value delimited by a colon. An example of this flag would be: `-up field1:0.5 field2:0.1`."},
-			("-fl", "--filter-logic"): {"type": str, "choices": ["and", "or"], "default": "and", "help": "The logic to use when filtering variants based on the filter-lower and filter-upper flags, excluding --max-percentile-threshold and --peak-variants-only, which always use 'and' logic. The default is 'and', which means that a variant will be removed if it fails any of the filter conditions. If set to 'or', a variant will be removed if it fails all of the filter conditions."},
-			("-mpt", "--max-percentile-threshold"): {"type": float, "help": "Removes all variants from the annotations list whose max_percentile.mean (generated from running the scoring step with the -p flag, followed by the summary step) is less than or equal to the specified threshold, and always uses 'and' threshold logic. The default is 0.05.", "default": 0.05},
+		"args": {**{
+			("-i", "--summarize-output-path"): { "type": str, "help": 'A string representing the output file path of the `summarize` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--summarize-output-path /projects/summarize/adipocytes/mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/mean.variant_scores.tsv.'},
+			("-o", "--annotate-output-path"): { "type": str, "help": 'A string representing the output file path of the `annotate` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--annotate-output-path /projects/annotate/adipocytes/annotated.mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/annotated.mean.variant_scores.tsv.'},
 			("-p", "--peaks"): { "type": str, "help": "Adds overlapping peaks information. Bed file containing peak regions."},
 			("-po", "--peak-variants-only"): {"action": "store_true", "help": "Only keep variants whose peak_overlap (generated from the annotation step with the -p flag) is equal to True, and always uses 'and' threshold logic. Peaks file must be provided if used."},
-			("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
+			# TODO add a retain-only flag, to keep specified columns only
+			# ("-lo", "--filter-lower"): {"type": str, "nargs": "+", "help": "Removes all variants from the annotations list containing a field(s) with a value greater than or equal to the specified threshold(s). This flag accepts a list of pairs, where each pair contains the field and value delimited by a colon. By default this flag is set to `-lo abs_logfc.mean.pval:0.01 jsd.mean.pval:0.01`", "default": ["abs_logfc.mean.pval:0.01", "jsd.mean.pval:0.01"]},
+			# ("-up", "--filter-upper"): {"type": str, "nargs": "+", "help": "Removes all variants from the annotations list containing a field(s) with a value lower than or equal to the specified threshold(s). This flag accepts a list of pairs, where each pair contains the field and value delimited by a colon. An example of this flag would be: `-up field1:0.5 field2:0.1`."},
+			# ("-fl", "--filter-logic"): {"type": str, "choices": ["and", "or"], "default": "and", "help": "The logic to use when filtering variants based on the filter-lower and filter-upper flags, excluding --max-percentile-threshold and --peak-variants-only, which always use 'and' logic. The default is 'and', which means that a variant will be removed if it fails any of the filter conditions. If set to 'or', a variant will be removed if it fails all of the filter conditions."},
+			# ("-mpt", "--max-percentile-threshold"): {"type": float, "help": "Removes all variants from the annotations list whose max_percentile.mean (generated from running the scoring step with the -p flag, followed by the summary step) is less than or equal to the specified threshold, and always uses 'and' threshold logic. The default is 0.05.", "default": 0.05},
+		}, **shared_annotate_args},
+	},
+	"aggregate": {
+		"help": "Generate aggregate variant annotations from the per-model annotations generated with `score`, `summarize`, and `annotate`.",
+		"function": aggregate.main,
+		"args": {
+			("-i", "--annotate-output-paths"): { "type": str, "help": 'A string representing the output file path of the `annotate` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--annotate-output-path /projects/annotate/adipocytes/annotated.mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/annotated.mean.variant_scores.tsv.'},
+			("-pa", "--add-aggregate-annot-with-pandas"): { "nargs": 3, "metavar": ("LABEL", "EXPRESSION", "DEFAULT_VALUE"), "action": "append", "help": '''Generate a new annotation equal to the evaluation of a Pandas expression using `pandas.DataFrame.eval(EXPRESSION)`, applied on the resulting aggregate variant annotations. The per-model dataframe is exposed as `df`. For example, `--pa is_significant "sum + @df['sum']" 0` generates a new column named "is_significant" with values True or False.`''' },
+			# LABEL CONDITION (applied to model-specific to get annotations) AGGREGATION_OPERATION (i.e. sum, concat strings. unsure how to do this. prolly with pandas expression again, like df['col1'] + df['col2'])
+			# except sometimes you don't even want condition. Instead, you can have one expression, like aggr_df['new_label'] = aggr_df.get('new_label'] + model_df['new_label']
 		}
+	},
+	"annotate-prio": {
+		"help": "Generate useful annotations for each variant.",
+		"function": variant_annotation.main,
+		"args": {**{
+			# ("-i", "--prioritize-output-path"): { "type": str, "help": 'A string representing the output file path of the `prioritize` subcommand. Should contain information relevant to the project and subcommand. Example usage: `--summarize-output-path /projects/prioritize/adipocytes/mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/mean.variant_scores.tsv.'},
+			# ("-o", "--annotate-prio-output-path"): { "type": str, "help": 'A string representing the output file path of the `annotate` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--annotate-output-path /projects/annotate/adipocytes/mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/mean.variant_scores.tsv.'},
+		}, **shared_annotate_args},
 	},
 	"shap":
 	{ 

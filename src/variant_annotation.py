@@ -9,19 +9,10 @@ from utils.helpers import *
 pd.set_option('display.max_columns', 20)
 
 def main(args = None):
-
-    if args is None:
-        logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
-                            format='%(asctime)s - %(levelname)s - %(message)s')
-
-        args = fetch_annotation_args()
-
-    variant_scores_file = get_summarize_output_file(args.summary_dir, args.model_name)
+    variant_scores_file = args.summarize_output_path
     peak_path = args.peaks
 
     variant_scores = pd.read_table(variant_scores_file)
-    # TODO use os temp instead.
-    # tmp_bed_file_path = f"/tmp/{args.model_name}.variant_table.tmp.bed"
 
     variant_scores_bed_format = None
     if args.schema == "bed":
@@ -36,7 +27,6 @@ def main(args = None):
         variant_scores_bed_format = variant_scores_bed_format[['chr','pos','end','allele1','allele2','variant_id']]
         variant_scores_bed_format.sort_values(by=["chr","pos","end"], inplace=True)
 
-    print(args)
     if args.join_tsvs:
         for tsv, label, direction in reversed(args.join_args):
             join_df = pd.read_csv(tsv, sep='\t')
@@ -56,25 +46,30 @@ def main(args = None):
         variant_scores['peak_overlap'] = variant_scores['variant_id'].isin(peak_intersect_df['variant_id'].tolist())
 
     if args.add_n_closest_elements:
-        add_n_closest_elements_inplace(variant_scores, args.add_n_closest_elements, variant_scores_bed_format)
+        variant_scores = add_n_closest_elements(variant_scores, args.closest_n_elements_args, variant_scores_bed_format)
 
     if args.add_closest_elements_in_window:
-        add_closest_elements_in_window_inplace(variant_scores, args.add_n_closest_elements, variant_scores_bed_format)
-
+        variant_scores = add_closest_elements_in_window(variant_scores, args.closest_elements_in_window_args, variant_scores_bed_format)
+    
     if args.r2:
-        add_r2_inplace(variant_scores, args.r2)
+        variant_scores = add_r2(variant_scores, args.r2)
             
     if args.add_adastra:
-        add_adastra_inplace(variant_scores, args.adastra_tf_file, args.adastra_celltype_file, args.threads)
+        variant_scores = add_adastra(variant_scores, args.adastra_tf_file, args.adastra_celltype_file, args.threads)
+    
+    if args.add_annot_using_pandas:
+        variant_scores = add_annot_using_pandas(variant_scores, args.add_annot_using_pandas)
+
+    if args.add_annot_using_python:
+        variant_scores = add_annot_using_python(variant_scores, args.add_annot_using_python)
 
     logging.info(f"Final annotation table:\n{variant_scores.shape}\n{variant_scores.head()}")
 
-    out_file = get_annotate_output_file(args.annotate_dir, args.model_name)
-    variant_scores.to_csv(out_file,\
+    variant_scores.to_csv(args.annotate_output_path,\
                           sep="\t",\
                           index=False)
 
-    logging.info(f"Annotation step completed! Output written to: {out_file}")
+    logging.info(f"Annotation step completed! Output written to: {args.annotate_output_path}")
 
 
 if __name__ == "__main__":
