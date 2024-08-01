@@ -7,14 +7,6 @@ from utils.helpers import *
 import logging
 
 def main(args = None, filter_dir_override = None):
-    if args is None:
-        args = argmanager.fetch_scoring_args()
-        logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
-                            format='%(asctime)s - %(levelname)s - %(message)s')
-
-    output_dir = args.score_dir
-    if not os.path.isdir(args.score_dir):
-        os.makedirs(args.score_dir)
 
     variants_table = None
 
@@ -52,8 +44,8 @@ def main(args = None, filter_dir_override = None):
     shuf_variants_table = create_shuffle_table(variants_table,args.random_seed, args.total_shuf, args.num_shuf)
     print("Shuffled variants table shape:", shuf_variants_table.shape)
 
-    shuf_scores_file = get_score_shuffled_path(output_dir, args.model_name, args.fold)
-    peak_scores_file = get_score_peaks_path(output_dir, args.model_name, args.fold)
+    shuf_scores_file = get_score_shuffled_path(args.score_output_path_prefix)
+    peak_scores_file = get_score_peaks_path(args.score_output_path_prefix)
 
     if len(shuf_variants_table) > 0:
         if args.debug_mode:
@@ -135,7 +127,7 @@ def main(args = None, filter_dir_override = None):
         assert np.array_equal(peaks["peak_id"].tolist(), peak_ids)
         peaks["peak_score"] = peak_pred_counts
         logging.debug(f"Peak table with scores:\n{peaks.head()}\n{peaks.shape}")
-        os.makedirs(get_score_dir(output_dir, args.model_name, args.fold))
+        os.makedirs(get_score_dir(args.score_output_path_prefix), exist_ok=True)
         peaks.to_csv(peak_scores_file, sep="\t", index=False)
 
     if len(shuf_variants_table) > 0 and not shuf_variants_done:
@@ -307,13 +299,13 @@ def main(args = None, filter_dir_override = None):
 
     logging.info(f"Output score table:\n{variants_table.head()}\n{variants_table.shape}")
 
-    output_tsv = get_score_file_path(output_dir, args.model_name, args.fold)
+    output_tsv = get_score_file_path(args.score_output_path_prefix)
 
     variants_table.to_csv(output_tsv, sep="\t", index=False)
 
     # store predictions at variants
     if hasattr(args, "no_hdf5") and not args.no_hdf5 or filter_dir_override is not None:
-        output_h5 = get_profiles_file_path(output_dir, args.model_name, args.fold)
+        output_h5 = get_profiles_file_path(args.score_output_path_prefix)
         with h5py.File(output_h5, 'w') as f:
             observed = f.create_group('observed')
             # Print shapes
@@ -344,9 +336,9 @@ def main(args = None, filter_dir_override = None):
             #         shuffled.create_dataset('shuf_jsd_max_percentile', data=shuf_jsd_max_percentile, compression='gzip', compression_opts=9)
             #         shuffled.create_dataset('shuf_logfc_x_jsd_x_max_percentile', data=shuf_logfc_jsd_max_percentile, compression='gzip', compression_opts=9)
             #         shuffled.create_dataset('shuf_abs_logfc_x_jsd_x_max_percentile', data=shuf_abs_logfc_jsd_max_percentile, compression='gzip', compression_opts=9)
-        logging.info(f"Finished scoring for {args.model_name} and saved to {output_tsv} and {output_h5}")
+        logging.info(f"Finished scoring and saved to {output_tsv} and {output_h5}")
     else:
-        logging.info(f"Finished scoring for {args.model_name} and saved to {output_tsv}")
+        logging.info(f"Finished scoring and saved to {output_tsv}")
 
 
 if __name__ == "__main__":

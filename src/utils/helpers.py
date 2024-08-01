@@ -401,26 +401,23 @@ def add_missing_columns_to_peaks_df(peaks, schema):
     
     return peaks
 
-def get_score_dir(score_dir, model_name, fold):
-    return os.path.join(score_dir, model_name, f'fold_{fold}')
+def get_score_dir(score_out_prefix):
+    return os.path.dirname(score_out_prefix)
 
-def get_score_file_path(score_dir, model_name, fold, chr=None):
+def get_score_file_path(score_out_prefix, chr=None):
     if chr is None:
-        return os.path.join(get_score_dir(score_dir, model_name, fold), 'variant_scores.tsv')
+        return f"{score_out_prefix}variant_scores.tsv"
     else:
-        return os.path.join(get_score_dir(score_dir, model_name, fold), f'chr{str(chr)}.variant_scores.tsv')
+        return f"{score_out_prefix}chr{str(chr)}.variant_scores.tsv"
     
-def get_score_peaks_path(score_dir, model_name, fold):
-    return os.path.join(get_score_dir(score_dir, model_name, fold), 'peak_scores.tsv')
+def get_score_peaks_path(score_out_prefix):
+    return f"{score_out_prefix}peak_scores.tsv"
 
-def get_score_shuffled_path(score_dir, model_name, fold):
-    return os.path.join(get_score_dir(score_dir, model_name, fold), 'variant_scores.shuffled.tsv')
+def get_score_shuffled_path(score_out_prefix):
+    return f"{score_out_prefix}variant_scores.shuffled.tsv"
 
-def get_profiles_file_path(score_dir, model_name, fold):
-    return os.path.join(get_score_dir(score_dir, model_name, fold), 'variant_predictions.tsv')
-
-def get_summarize_output_file(summary_dir, model_name):
-    return f"{os.path.join(summary_dir, model_name)}.mean.variant_scores.tsv"
+def get_profiles_file_path(score_out_prefix):
+    return f"{score_out_prefix}variant_predictions.tsv"
 
 def get_annotate_output_file(annotate_dir, model_name):
     return f"{os.path.join(annotate_dir, model_name)}.annotations.tsv"

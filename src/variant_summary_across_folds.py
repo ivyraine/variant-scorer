@@ -3,28 +3,17 @@ import numpy as np
 import os
 from utils.argmanager import *
 from utils.helpers import *
+import logging
 
 def main(args = None):
-    if args is None:
-        args = fetch_summary_args()
-        logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
-                            format='%(asctime)s - %(levelname)s - %(message)s')
-    print(args)
-
-    variant_scores_files = []
-    if args.score_filenames is not None and 0 < len(args.score_filenames):
-        variant_scores_files = [ os.path.join(args.score_dir, args.score_filenames[i]) for i in range(len(args.score_filenames)) ]
-    elif hasattr(args, "models"):
-        variant_scores_files = [ f"{get_score_output_file_prefix(args.score_dir, args.model_name, index)}.variant_scores.tsv" for index in range(len(args.models)) ]
-    else:
-        print("Error: No models or score list provided. Cannot perform summary. Exiting.")
-        exit(1)
-
     score_dict = {}
-    for file_index, variant_score_file in enumerate(variant_scores_files):
+
+    for file_index, variant_score_file in enumerate(args.scores_paths):
         assert os.path.isfile(variant_score_file), f"Error: The file '{variant_score_file}' does not exist or is not a file."
         var_score = pd.read_table(variant_score_file)
         score_dict[file_index] = var_score
+
+    os.makedirs(os.path.dirname(args.summarize_output_path), exist_ok=True)
 
     variant_scores = score_dict[0][get_variant_schema(args.schema)].copy()
     for file_index in score_dict:
@@ -45,17 +34,13 @@ def main(args = None):
             elif score + '_pval' in score_dict[0]:
                 variant_scores.loc[:, (score + '.mean' + '.pval')] = geo_mean_overflow([score_dict[fold][score + '_pval'].values for fold in score_dict])
 
-    print()
-    print(variant_scores.head())
-    print("Summary score table shape:", variant_scores.shape)
-    print()
+    logging.debug(f"Summary score table:\n{variant_scores.head()}\nSummary score table shape: {variant_scores.shape}")
 
-    out_file = f"{get_summary_output_file(args.summary_dir, args.model_name)}"
-    variant_scores.to_csv(out_file,\
+    variant_scores.to_csv(args.summarize_output_path,\
                           sep="\t",\
                           index=False)
 
-    logging.info(f"Summary step completed! Output written to: {out_file}")
+    logging.info(f"Summary step completed! Output written to: {args.summarize_output_path}")
 
 
 if __name__ == "__main__":
