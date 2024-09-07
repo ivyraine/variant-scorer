@@ -45,10 +45,16 @@ def main(args = None, filter_dir_override = None):
 
     print("Final variants table shape:", variants_table.shape)
 
-    shuf_variants_table = create_shuffle_table(variants_table,args.random_seed, args.total_shuf, args.num_shuf)
-    print("Shuffled variants table shape:", shuf_variants_table.shape)
+    if args.shuffled_scores:
+        shuf_variants_table = pd.read_table(args.shuffled_scores)
+        print("Shuffled variants table shape:", shuf_variants_table.shape)
+        shuf_scores_file = args.shuffled_scores
 
-    shuf_scores_file = get_score_shuffled_path(args.score_output_path_prefix)
+    else:
+        shuf_variants_table = create_shuffle_table(variants_table, args.random_seed, args.total_shuf, args.num_shuf)
+        print("Shuffled variants table shape:", shuf_variants_table.shape)
+        shuf_scores_file = get_score_shuffled_path(args.score_output_path_prefix)
+
     peak_scores_file = get_score_peaks_path(args.score_output_path_prefix)
 
     if len(shuf_variants_table) > 0:
