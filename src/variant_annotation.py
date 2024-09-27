@@ -9,7 +9,7 @@ from utils.helpers import *
 pd.set_option('display.max_columns', 20)
 
 def main(args = None):
-    variant_scores_file = args.summarize_output_path
+    variant_scores_file = args.summary_path
     peak_path = args.peaks
 
     variant_scores = pd.read_table(variant_scores_file)
@@ -65,11 +65,13 @@ def main(args = None):
 
     logging.info(f"Final annotation table:\n{variant_scores.shape}\n{variant_scores.head()}")
 
-    variant_scores.to_csv(args.annotate_output_path,\
+    os.makedirs(os.path.dirname(args.annotation_path), exist_ok=True)
+
+    variant_scores.to_csv(args.annotation_path,\
                           sep="\t",\
                           index=False)
 
-    logging.info(f"Annotation step completed! Output written to: {args.annotate_output_path}")
+    logging.info(f"Annotation step completed! Output written to: {args.annotation_path}")
 
 
 if __name__ == "__main__":

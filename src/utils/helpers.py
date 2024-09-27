@@ -19,6 +19,9 @@ import tempfile
 from multiprocessing import Pool
 
 DEFAULT_ADASTRA_THREADS = 4
+MODEL_ID_COL = 'model_id'
+ANNOTATE_OUT_PATH_COL = 'annotate_output_path'
+AGGREGATE_OUT_PATH_COL = 'aggregate_output_path'
 
 def get_variant_schema(schema):
     var_SCHEMA = {'original': ['chr', 'pos', 'variant_id', 'allele1', 'allele2'],
@@ -258,9 +261,9 @@ def adjust_indel_jsd(variants_table,allele1_pred_profiles,allele2_pred_profiles,
     indel_idx = []
     for i, row in variants_table.iterrows():
         allele1, allele2 = row[['allele1','allele2']]
-        if allele1 == "-":
+        if allele1 in ["-", "*"]:
             allele1 = ""
-        if allele2 == "-":
+        if allele2 in ["-", "*"]:
             allele2 = ""
         if len(allele1) != len(allele2):
             indel_idx += [i]
@@ -269,9 +272,9 @@ def adjust_indel_jsd(variants_table,allele1_pred_profiles,allele2_pred_profiles,
     for i in indel_idx:
         row = variants_table.iloc[i]
         allele1, allele2 = row[['allele1','allele2']]
-        if allele1 == "-":
+        if allele1 in ["-", "*"]:
             allele1 = ""
-        if allele2 == "-":
+        if allele2 in ["-", "*"]:
             allele2 = ""
 
         allele1_length = len(allele1)
@@ -642,8 +645,134 @@ def add_annot_using_pandas(variant_scores: pd.DataFrame, args):
         variant_scores[label] = variant_scores.eval(expression)
     return variant_scores
 
+
 def add_annot_using_python(variant_scores: pd.DataFrame, args):
     for label, expression in args:
         # Expose variant_scores as df for the user.
         variant_scores[label] = eval(expression, None, {'df': variant_scores})
     return variant_scores
+
+
+def add_aggregate_annots_using_pandas(agg_annots: pd.DataFrame, cur_annots: pd.DataFrame, args):
+    for label, expression, default_value_expression in args:
+        # If the label is not in the aggregate DataFrame, add it with the default value.
+        if label not in agg_annots.columns:
+            # Check if it's a dynamic expression
+            if isinstance(default_value_expression, str):
+                # Evaluate the default value expression using df as agg_annots
+                agg_annots[label] = agg_annots.eval(default_value_expression, local_dict={'df': agg_annots})
+            else:
+                # Directly assign if it's a static value
+                agg_annots[label] = default_value_expression
+
+        # Evaluate the expression using df as agg_annots and cur_df as cur_annots
+        agg_annots[label] = agg_annots.eval(expression, local_dict={'df': agg_annots, 'cur_df': cur_annots})
+    
+    return agg_annots
+
+
+def add_aggregate_annots_using_python(agg_annots: pd.DataFrame, cur_annots: pd.DataFrame, args):
+    for label, expression, default_value_expression in args:
+        # If the label is not in the aggregate DataFrame, add it with the default value.
+        if label not in agg_annots.columns:
+            # agg_annots[label] = default_value_expression
+            agg_annots[label] = eval(default_value_expression, None, {'df': agg_annots})
+        # Expose the aggregate DataFrame as df, and the DataFrame to be added as cur_df, for the user.
+        agg_annots[label] = eval(expression, None, {'df': agg_annots, 'cur_df': cur_annots})
+    return agg_annots
+
+
+def parse_sort_together(group_expressions: List[str]):
+    """
+    Parse the --sort-together argument which can include column name, delimiter, sort order, and type.
+    Format: col:delim:sort_order:type or col:delim:sort_order, or col:delim for default sort order and type.
+    """
+    parsed_groups = []
+    
+    for group in group_expressions:
+        parsed_group = []
+        columns = group.split('|')
+        
+        for col in columns:
+            parts = col.split(':')
+            if len(parts) not in [2, 3, 4]:
+                raise ValueError(f"Invalid format in {col}. Expected format is col:delimiter:sort_order:type, or col:delimiter:sort_order, or col:delimiter for default sort order.")
+            
+            column_name = parts[0]
+            delimiter = parts[1]
+            sort_order = True  # Default is ascending order
+            data_type = 'str'  # Default type is string
+
+            if len(parts) >= 3:
+                sort_order = parts[2].lower() == 'asc'
+            if len(parts) == 4:
+                data_type = parts[3].lower()  # Accept data type as the fourth part
+            
+            parsed_group.append({
+                'column': column_name,
+                'delimiter': delimiter,
+                'sort_order': sort_order,
+                'data_type': data_type  # Add data type to the parsed info
+            })
+        
+        parsed_groups.append(parsed_group)
+    
+    return parsed_groups
+
+
+def apply_multilevel_sort(df, sort_groups):
+    """
+    Sort the values within the columns of each row, based on the parsed sort_groups.
+    The first column is sorted first, then the second column is used as a tie-breaker, and so on.
+    """
+    for group in sort_groups:
+        # Extract column names, delimiters, sort orders, and data types
+        columns = [col_info['column'] for col_info in group]
+        delimiters = [col_info['delimiter'] for col_info in group]
+        sort_orders = [col_info['sort_order'] for col_info in group]
+        data_types = [col_info['data_type'] for col_info in group]
+
+        # Split the columns into lists based on delimiters
+        split_columns = [df[col].str.split(delimiter) for col, delimiter in zip(columns, delimiters)]
+        
+        # Convert each list to the appropriate data type
+        for i, data_type in enumerate(data_types):
+            if data_type == 'int':
+                split_columns[i] = split_columns[i].apply(lambda lst: [int(x) for x in lst])
+            elif data_type == 'float':
+                split_columns[i] = split_columns[i].apply(lambda lst: [float(x) for x in lst])
+            elif data_type == 'str':
+                split_columns[i] = split_columns[i].apply(lambda lst: [str(x) for x in lst])
+
+        # Combine the lists in each row into a tuple and sort based on the first column, second column on ties, etc.
+        for index in range(df.shape[0]):
+            # Zip the values together for this row
+            zipped = list(zip(*[split_columns[i][index] for i in range(len(columns))]))
+
+            # Sort based on the first column, then second, etc., respecting individual sort orders
+            def custom_sort_key(x):
+                key = []
+                for i in range(len(columns)):
+                    if isinstance(x[i], (int, float)):
+                        # If descending, negate the number
+                        key.append(-x[i] if not sort_orders[i] else x[i])
+                    elif isinstance(x[i], str):
+                        if sort_orders[i]:
+                            # Ascending order for strings
+                            key.append(x[i])
+                        else:
+                            # Descending order for strings: reverse lexicographical using ord()
+                            key.append(tuple(-ord(c) for c in x[i]))
+                return tuple(key)
+
+            sorted_zipped = sorted(zipped, key=custom_sort_key)
+
+            # Unzip the sorted result
+            sorted_lists = list(zip(*sorted_zipped))
+
+            # Reassign sorted values to the DataFrame columns
+            for i, col in enumerate(columns):
+                if sorted_lists:
+                    df.at[index, col] = delimiters[i].join(map(str, sorted_lists[i]))
+
+    return df

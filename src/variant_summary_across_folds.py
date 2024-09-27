@@ -8,7 +8,7 @@ import logging
 def main(args = None):
     score_dict = {}
 
-    for file_index, variant_score_file in enumerate(args.scores_paths):
+    for file_index, variant_score_file in enumerate(args.score_output_paths):
         assert os.path.isfile(variant_score_file), f"Error: The file '{variant_score_file}' does not exist or is not a file."
         var_score = pd.read_table(variant_score_file)
         score_dict[file_index] = var_score

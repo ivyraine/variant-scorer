@@ -10,6 +10,7 @@ import logging
 
 import argparse
 from os.path import isfile
+from utils.helpers import MODEL_ID_COL, ANNOTATE_OUT_PATH_COL, AGGREGATE_OUT_PATH_COL
 
 class ClosestElementsAction(argparse.Action):
 	def __call__(self, parser, namespace, values, option_string=None):
@@ -71,9 +72,26 @@ class AdastraAction(argparse.Action):
 		setattr(namespace, 'adastra_celltype_file', values[1])
 		setattr(namespace, self.dest, True)
 
+def parse_default_value(val):
+	# Check if the value can be converted to an int
+	if val.isdigit():
+		return int(val)
+	# Check if the value can be converted to a float
+	try:
+		float_val = float(val)
+		return float_val
+	except ValueError:
+		pass
+	# Check if the value can be converted to a boolean
+	if val in ['True', 'False']:
+		return val.lower() == 'true'
+	# Return the value as a string if no other conversion applies
+	return val
 
 shared_annotate_args = {
 	# TODO rename this since this is not just for bool. also rename to like: add-label-using-pandas
+	("-p", "--peaks"): { "type": str, "help": "Adds overlapping peaks information. Bed file containing peak regions."},
+	("-po", "--peak-variants-only"): {"action": "store_true", "help": "Only keep variants whose peak_overlap is equal to True, and always uses 'and' threshold logic. Peaks file must be provided if used."},
 	("-pd", "--add-annot-using-pandas"): { "nargs": 2, "metavar": ('LABEL', 'EXPRESSION'), "action": "append", "help": '''Generate a new annotation with values equal to the evaluation of a Pandas expression using `pandas.DataFrame.eval(EXPRESSION)`. For example, `--add-annot-using-pandas is_significant "logfc.mean.pval < 0.01) | jsd.mean.pval < 0.01 & active_allele_quantile.mean > 0.05"`. Can be called multiple times to generate multiple annotations.''' },
 	("-py", "--add-annot-using-python"): { "nargs": 2, "metavar": ('LABEL', 'EXPRESSION'), "action": "append", "help": '''Generate a new annotation with values equal to the evaluation of a Python expression using `eval(EXPRESSION)`. For example, `--add-annot-using-python is_significant "((df['logfc.mean.pval'] < 0.01 | (df['jsd.mean.pval'] < 0.01)) & (df['active_allele_quantile.mean'] > 0.05)"`. Can be called multiple times to generate multiple annotations.''' },
 	("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
@@ -94,7 +112,7 @@ subcommand_args = {
 			("-l", "--variant-list"): { "type": str, "help": "a TSV file containing a list of variants to score.", "required": True},
 			("-g", "--genome"): {"type": str, "help": "Genome fasta.", "required": True},
 			("-m", "--model-path"): {"type": str, "help": "ChromBPNet model to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
-			("-op", "--score-output-path-prefix"): {"type": str, "help": 'A string that will be prefixed to the outputs of the `score` subcommand, to form a valid path to be written to. Should contain information relevant to the project, subcommand, model, and fold, if relevant. Used in this way: "<output-path-prefix><output-file-suffix>". Example usage: `--score-output-path-prefix /projects/score/adipocytes/fold_0/` will output to paths like /projects/score/adipocytes/fold_0/variant_scores.tsv.', "required": True},
+			("-o", "--score-output-path-prefix"): {"type": str, "help": 'A string that will be prefixed to the outputs of the `score` subcommand, to form a valid path to be written to. Should contain information relevant to the project, subcommand, model, and fold, if relevant. Used in this way: "<output-path-prefix><output-file-suffix>". Example usage: `--score-output-path-prefix /projects/score/adipocytes/fold_0/` will output to paths like /projects/score/adipocytes/fold_0/variant_scores.tsv.', "required": True},
 			("-s", "--chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes", "required": True},
 			("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
 			("-ps", "--peak-chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes for peak genome."},
@@ -120,7 +138,7 @@ subcommand_args = {
 		"help": "Summarize variant scores across folds.",
 		"function": variant_summary_across_folds.main,
 		"args": {
-			("-i", "--scores-paths"): { "nargs": '+', "help": "A (space-separated) list of variant score file paths (generally, each from a different fold) to be summarized together, generated from the `score` subcommand. Used like so: `--scores-paths /projects/score/adipocytes/fold_0/variant_scores.tsv /projects/score/adipocytes/fold_1/variant_scores.tsv /projects/score/adipocytes/fold_2/variant_scores.tsv ...`."},
+			("-i", "--score-output-paths"): { "nargs": '+', "help": "A (space-separated) list of variant score file paths (generally, each from a different fold) to be summarized together, generated from the `score` subcommand. Used like so: `--score-output-paths /projects/score/adipocytes/fold_0/variant_scores.tsv /projects/score/adipocytes/fold_1/variant_scores.tsv /projects/score/adipocytes/fold_2/variant_scores.tsv ...`."},
 			("-o", "--summarize-output-path"): { "type": str, "help": 'A string representing the output file path of the `summarize` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--summarize-output-path /projects/summarize/adipocytes/mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/mean.variant_scores.tsv.'},
 			("-sc", "--schema"): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
 			("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
@@ -132,8 +150,6 @@ subcommand_args = {
 		"args": {**{
 			("-i", "--summarize-output-path"): { "type": str, "help": 'A string representing the output file path of the `summarize` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--summarize-output-path /projects/summarize/adipocytes/mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/mean.variant_scores.tsv.'},
 			("-o", "--annotate-output-path"): { "type": str, "help": 'A string representing the output file path of the `annotate` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--annotate-output-path /projects/annotate/adipocytes/annotated.mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/annotated.mean.variant_scores.tsv.'},
-			("-p", "--peaks"): { "type": str, "help": "Adds overlapping peaks information. Bed file containing peak regions."},
-			("-po", "--peak-variants-only"): {"action": "store_true", "help": "Only keep variants whose peak_overlap (generated from the annotation step with the -p flag) is equal to True, and always uses 'and' threshold logic. Peaks file must be provided if used."},
 			# TODO add a retain-only flag, to keep specified columns only
 			# ("-lo", "--filter-lower"): {"type": str, "nargs": "+", "help": "Removes all variants from the annotations list containing a field(s) with a value greater than or equal to the specified threshold(s). This flag accepts a list of pairs, where each pair contains the field and value delimited by a colon. By default this flag is set to `-lo abs_logfc.mean.pval:0.01 jsd.mean.pval:0.01`", "default": ["abs_logfc.mean.pval:0.01", "jsd.mean.pval:0.01"]},
 			# ("-up", "--filter-upper"): {"type": str, "nargs": "+", "help": "Removes all variants from the annotations list containing a field(s) with a value lower than or equal to the specified threshold(s). This flag accepts a list of pairs, where each pair contains the field and value delimited by a colon. An example of this flag would be: `-up field1:0.5 field2:0.1`."},
@@ -145,10 +161,17 @@ subcommand_args = {
 		"help": "Generate aggregate variant annotations from the per-model annotations generated with `score`, `summarize`, and `annotate`.",
 		"function": aggregate.main,
 		"args": {
-			("-i", "--annotate-output-paths"): { "type": str, "help": 'A string representing the output file path of the `annotate` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--annotate-output-path /projects/annotate/adipocytes/annotated.mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/annotated.mean.variant_scores.tsv.'},
-			("-pa", "--add-aggregate-annot-with-pandas"): { "nargs": 3, "metavar": ("LABEL", "EXPRESSION", "DEFAULT_VALUE"), "action": "append", "help": '''Generate a new annotation equal to the evaluation of a Pandas expression using `pandas.DataFrame.eval(EXPRESSION)`, applied on the resulting aggregate variant annotations. The per-model dataframe is exposed as `df`. For example, `--pa is_significant "sum + @df['sum']" 0` generates a new column named "is_significant" with values True or False.`''' },
+			("-i", "--annotate-output-paths"): { "nargs": '+', "type": str, "help": 'A (space-separated) list of strings representing the output file path of the `annotate` subcommand. Example usage: `--annotate-output-paths /projects/annotate/adipocytes/annotated.mean.variant_scores.tsv /projects/annotate/cardiomyocytes/annotated.mean.variant_scores.tsv ...`. It is recommended to use --input-metadata instead of this flag.'},
+			("-im", "--input-metadata"): {"type": str, "help": f'A TSV file containing three required columns for this subcommand: "{MODEL_ID_COL}", "{ANNOTATE_OUT_PATH_COL}", and "{AGGREGATE_OUT_PATH_COL}".'},
+			("-o", "--aggregate-output-path"): { "type": str, "help": 'A string representing the output file path of the `aggregate` subcommand. Example usage: `--aggregate-output-path /projects/aggregate/adipocytes/aggregate.variant_scores.tsv`. It is recommended to use --input-metadata instead of this flag.'},
+			# ("-pa", "--add-aggregate-annot-with-pandas"): { "nargs": 3, "metavar": ("LABEL", "EXPRESSION", "DEFAULT_VALUE_EXPRESSION"), "action": "append", "help": '''Generate a new annotation equal to the evaluation of a Pandas expression using `pandas.DataFrame.eval(EXPRESSION)`, applied on the resulting aggregate variant annotations. The per-model DataFrame is exposed as `cur`. For example, `-pa sum "sum + @cur_df['sum']" 0` generates a new column named "is_significant" with values True or False.`'''},
+			("-py", "--add-aggregate-annot-with-python"): { "nargs": 3, "metavar": ("LABEL", "EXPRESSION", "DEFAULT_VALUE_EXPRESSION"), "action": "append", "help": '''Generate a new annotation equal to the evaluation of a Python expression using `eval(EXPRESSION)`, applied on the resulting aggregate variant annotations. The aggregate DataFrame is exposed as `df` and the per-model DataFrame as `cur_df`. For example, `-py sum "df['sum'] + cur_df['sum']" 0` generates a new column named "is_significant" with values True or False.''' },
+			("-sort", "--sort-together"): { "nargs": '+', "type": str, "help": '''Sorts multiple columns together, where each column represents a list of elements. These are inputed as strings describing the columns in the order they're given, delimiter, sort_order (optional, defaults to "asc"), and data type (optional, defaults as "str"). Groups of columns to sort together are provided as separate expressions, such as `--sort-together "col1:, :asc:str|col2:; :desc:int" "col3:,:asc:float|col4:;::str"`. Information describing each column and their delimiter and sort order are separated by ':'. Each of of these column specifications are separated by '|'.''' },
+			("-id", "--add-temp-model-id"): {'action': 'store_true', "help": f'Temporarily adds a single-value "{MODEL_ID_COL} column to each TSV iterated through, so that the model ID may be used in annotations.".'},
+			# ("-id", "--add-temp-model-id"): {"type": bool, "help": f'Temporarily adds a single-value "{MODEL_ID_COL} column to each TSV iterated through, so that the model ID may be used in annotations.".'},
 			# LABEL CONDITION (applied to model-specific to get annotations) AGGREGATION_OPERATION (i.e. sum, concat strings. unsure how to do this. prolly with pandas expression again, like df['col1'] + df['col2'])
 			# except sometimes you don't even want condition. Instead, you can have one expression, like aggr_df['new_label'] = aggr_df.get('new_label'] + model_df['new_label']
+			("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 		}
 	},
 	"annotate-prio": {
