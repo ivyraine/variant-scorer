@@ -10,25 +10,38 @@ pd.set_option('display.max_columns', 20)
 
 def main(args = None):
 
-    # Get input and output paths.
     metadata = None
+    # Get input and output paths.
+    if args.input_metadata:
+        metadata = pd.read_csv(args.input_metadata, sep='\t')
+
     if args.subcommand == 'annotate-summ':
         if args.input_metadata:
-            metadata = pd.read_csv(args.input_metadata, sep='\t')
+            if args.subcommand == 'annotate-summ' and not set([SUMMARIZE_OUT_PATH_COL, ANNOTATE_SUMM_OUT_PATH_COL]).issubset(metadata.columns):
+                raise ValueError(f"Metadata file {args.input_metadata} must contain columns: {PEAKS_PATH_COL}, {SUMMARIZE_OUT_PATH_COL}, {ANNOTATE_SUMM_OUT_PATH_COL}")
+            if args.peaks and args.peaks != True:
+                raise ValueError(f"The --peaks flag must not take an argument when provided with --input-metadata. Remove the argument and try again.")
+            elif args.peaks and not set ([PEAKS_PATH_COL]).issubset(metadata.columns):
+                raise ValueError(f"Metadata file {args.input_metadata} must contain column: {PEAKS_PATH_COL}")
         else:
             metadata = pd.DataFrame({PEAKS_PATH_COL: [args.peaks], SUMMARIZE_OUT_PATH_COL: [args.summarize_output_path], ANNOTATE_SUMM_OUT_PATH_COL: [args.annotate_summ_output_path]})
+        # Check if the peaks path column is provided.
         input_col = SUMMARIZE_OUT_PATH_COL
         output_col = ANNOTATE_SUMM_OUT_PATH_COL
     elif args.subcommand == 'annotate-aggr':
         if args.input_metadata:
-            metadata = pd.read_csv(args.input_metadata, sep='\t')
+            # Check for peaks column if peaks are to be used.
+            if args.subcommand == 'annotate-aggr' and not set([AGGREGATE_OUT_PATH_COL, ANNOTATE_AGGR_OUT_PATH_COL]).issubset(metadata.columns):
+                raise ValueError(f"Metadata file {args.input_metadata} must contain columns: {PEAKS_PATH_COL}, {AGGREGATE_OUT_PATH_COL}, {ANNOTATE_AGGR_OUT_PATH_COL}")
         else:
             metadata = pd.DataFrame({PEAKS_PATH_COL: [args.peaks], AGGREGATE_OUT_PATH_COL: [args.aggregate_output_path], ANNOTATE_AGGR_OUT_PATH_COL: [args.annotate_aggr_output_path]})
         input_col = AGGREGATE_OUT_PATH_COL
         output_col = ANNOTATE_AGGR_OUT_PATH_COL
     else:
         raise ValueError(f"Invalid subcommand {args.subcommand}")
-    metadata = metadata[[input_col, output_col]].drop_duplicates()
+    # Drop duplicates based on input_col and output_col, keeping other columns intact
+    metadata = metadata.drop_duplicates(subset=[input_col, output_col])
+
 
     # Process input & output path pairs.
     for index, row in metadata.iterrows():
@@ -53,9 +66,13 @@ def main(args = None):
                 join_df = pd.read_csv(tsv, sep='\t')
                 variant_scores = variant_scores.merge(join_df, how=direction, on=label)
 
-        if args.peaks:
+        if args.subcommand == 'annotate-summ' and args.peaks:
             logging.info("Annotating with peak overlap")
-            peak_df = pd.read_table(args.peaks, header=None)
+
+            # Get the peaks file path from the metadata file if provided.
+            peaks_file = row[PEAKS_PATH_COL] if args.peaks is True else args.peaks
+
+            peak_df = pd.read_table(peaks_file, header=None)
             variant_bed = pybedtools.BedTool.from_dataframe(variant_scores_bed_format)
             peak_bed = pybedtools.BedTool.from_dataframe(peak_df)
             peak_intersect_bed = variant_bed.intersect(peak_bed, wa=True, u=True)

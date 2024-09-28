@@ -501,7 +501,7 @@ def add_closest_elements_in_window(variant_scores: pd.DataFrame, closest_element
             closest_element_df = closest_element_df[['variant_id']]
             output_label = f"{element_label}_within_{window_size}_bp"
             closest_element_df[output_label] = closest_element_df['variant_id'].apply(
-                lambda x: '; '.join(closest_elements[x]) if x in closest_elements else ''
+                lambda x: ', '.join(closest_elements[x]) if x in closest_elements else ''
             )
 
             closest_element_df.drop_duplicates(inplace=True)

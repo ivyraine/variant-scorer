@@ -48,11 +48,25 @@ def main(args):
     
         if args.add_temp_model_id:
             agg_df = agg_df.drop(columns=[MODEL_ID_COL])
-
+        
         # Sort columns together.
         if args.sort_together:
             sort_groups = parse_sort_together(args.sort_together)
             agg_df = apply_multilevel_sort(agg_df, sort_groups)
+
+        # Drop model-specific columns.
+        agg_df.drop(columns=['logfc.mean', 'logfc.mean.pval', 'abs_logfc.mean',
+                             'abs_logfc.mean.pval', 'jsd.mean', 'jsd.mean.pval',
+                             'logfc_x_jsd.mean', 'logfc_x_jsd.mean.pval',
+                             'abs_logfc_x_jsd.mean', 'abs_logfc_x_jsd.mean.pval',
+                             'active_allele_quantile.mean', 'active_allele_quantile.mean.pval',
+                             'logfc_x_active_allele_quantile.mean', 'logfc_x_active_allele_quantile.mean.pval',
+                             'abs_logfc_x_active_allele_quantile.mean', 'abs_logfc_x_active_allele_quantile.mean.pval',
+                             'jsd_x_active_allele_quantile.mean', 'jsd_x_active_allele_quantile.mean.pval',
+                             'logfc_x_jsd_x_active_allele_quantile.mean', 'logfc_x_jsd_x_active_allele_quantile.mean.pval',
+                             'abs_logfc_x_jsd_x_active_allele_quantile.mean', 'abs_logfc_x_jsd_x_active_allele_quantile.mean.pval'],
+                    inplace=True, errors='ignore')
+                            
 
         os.makedirs(os.path.dirname(aggregate_out_path), exist_ok=True)
         agg_df.to_csv(aggregate_out_path, sep='\t', index=False)
