@@ -20,8 +20,11 @@ from multiprocessing import Pool
 
 DEFAULT_ADASTRA_THREADS = 4
 MODEL_ID_COL = 'model_id'
-ANNOTATE_OUT_PATH_COL = 'annotate_output_path'
+PEAKS_PATH_COL = 'peaks_path'
+SUMMARIZE_OUT_PATH_COL = 'summarize_output_path'
+ANNOTATE_SUMM_OUT_PATH_COL = 'annotate_summ_output_path'
 AGGREGATE_OUT_PATH_COL = 'aggregate_output_path'
+ANNOTATE_AGGR_OUT_PATH_COL = 'annotate_aggr_output_path'
 
 def get_variant_schema(schema):
     var_SCHEMA = {'original': ['chr', 'pos', 'variant_id', 'allele1', 'allele2'],
