@@ -29,10 +29,14 @@ def main(args = None, filter_dir_override = None):
         print("Chromosome variants table shape:", variants_table.shape)
 
     # infer input length
-    if args.lite:
+    if args.model_architecture == "chrombpnet":
+        input_len = model.input_shape[1]
+    elif args.model_architecture == 'chrombpnet-lite':
+        input_len = model.input_shape[0][1]
+    elif args.model_architecture == 'bpnet':
         input_len = model.input_shape[0][1]
     else:
-        input_len = model.input_shape[1]
+        raise ValueError(f"Model architecture {args.model_architecture} not supported")
 
     print("Input length inferred from the model:", input_len)
 
@@ -69,8 +73,8 @@ def main(args = None, filter_dir_override = None):
                                                                             input_len,
                                                                             args.genome,
                                                                             args.batch_size,
+                                                                            model_architecture=args.model_architecture,
                                                                             debug_mode=args.debug_mode,
-                                                                            lite=args.lite,
                                                                             shuf=True,
                                                                             forward_only=args.forward_only)
         assert np.array_equal(shuf_variants_table["variant_id"].tolist(), shuf_variant_ids)
@@ -121,8 +125,8 @@ def main(args = None, filter_dir_override = None):
                                                             input_len,
                                                             args.peak_genome,
                                                             args.batch_size,
+                                                            model_architecture=args.model_architecture,
                                                             debug_mode=args.debug_mode,
-                                                            lite=args.lite,
                                                             forward_only=args.forward_only)
         assert np.array_equal(peaks["peak_id"].tolist(), peak_ids)
         peaks["peak_score"] = peak_pred_counts
@@ -223,8 +227,8 @@ def main(args = None, filter_dir_override = None):
                                                                         input_len,
                                                                         args.genome,
                                                                         args.batch_size,
+                                                                        model_architecture=args.model_architecture,
                                                                         debug_mode=args.debug_mode,
-                                                                        lite=args.lite,
                                                                         shuf=False,
                                                                         forward_only=args.forward_only)
 

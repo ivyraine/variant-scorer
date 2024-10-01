@@ -81,7 +81,7 @@ def load_model_wrapper(model_file):
     logging.debug(f"Model {model_file} loaded successfully.")
     return model
 
-def fetch_peak_predictions(model, peaks, input_len, genome_fasta, batch_size, debug_mode=False, lite=False,forward_only=False):
+def fetch_peak_predictions(model, peaks, input_len, genome_fasta, batch_size, model_architecture, debug_mode=False, forward_only=False):
     peak_ids = []
     pred_counts = []
     pred_profiles = []
@@ -100,30 +100,49 @@ def fetch_peak_predictions(model, peaks, input_len, genome_fasta, batch_size, de
         batch_peak_ids, seqs = peak_gen[i]
         revcomp_seq = seqs[:, ::-1, ::-1]
 
-        if lite:
+        if model_architecture == 'chrombpnet':
+            batch_preds = model.predict(seqs, verbose=False)
+            if not forward_only:
+                revcomp_batch_preds = model.predict(revcomp_seq, verbose=False)
+        elif model_architecture == 'chrombpnet-lite':
             batch_preds = model.predict([seqs,
                                          np.zeros((len(seqs), model.output_shape[0][1])),
                                          np.zeros((len(seqs), ))],
                                         verbose=False)
-
             if not forward_only:
                 revcomp_batch_preds = model.predict([revcomp_seq,
                                              np.zeros((len(revcomp_seq), model.output_shape[0][1])),
                                              np.zeros((len(revcomp_seq), ))],
                                             verbose=False)
-        else:
-            batch_preds = model.predict(seqs, verbose=False)
+        elif model_architecture == 'bpnet':
+            batch_preds = model.predict([seqs,
+                                         np.zeros((len(seqs), model.output_shape[0][1], 2)),
+                                         np.zeros((len(seqs),2))],
+                                        verbose=False)
             if not forward_only:
-                revcomp_batch_preds = model.predict(revcomp_seq, verbose=False)
+                revcomp_batch_preds = model.predict([revcomp_seq,
+                                             np.zeros((len(revcomp_seq), model.output_shape[0][1],2)),
+                                             np.zeros((len(revcomp_seq),2))],
+                                            verbose=False)
+        else:
+            raise ValueError(f"Model architecture {model_architecture} not supported")
 
         batch_preds[1] = np.array([batch_preds[1][i] for i in range(len(batch_preds[1]))])
         pred_counts.extend(np.exp(batch_preds[1]))
-        pred_profiles.extend(np.array(batch_preds[0]))   # np.squeeze(softmax()) to get probability profile
+        if model_architecture in ['chrombpnet', 'chrombpnet-lite']:
+           pred_profiles.extend(np.array(batch_preds[0]))   # np.squeeze(softmax()) to get probability profile
+        elif model_architecture == 'bpnet':
+            batch_preds_profile = np.array(batch_preds[0])
+            pred_profiles.extend(batch_preds_profile.reshape((batch_preds_profile.shape[0],batch_preds_profile.shape[1]*batch_preds_profile.shape[2],1),order="F"))
 
         if not forward_only:
             revcomp_batch_preds[1] = np.array([revcomp_batch_preds[1][i] for i in range(len(revcomp_batch_preds[1]))])
             revcomp_counts.extend(np.exp(revcomp_batch_preds[1]))
-            revcomp_profiles.extend(np.array(revcomp_batch_preds[0]))    # np.squeeze(softmax()) to get probability profile
+            if model_architecture in ['chrombpnet', 'chrombpnet-lite']:
+                revcomp_profiles.extend(np.array(revcomp_batch_preds[0]))
+            elif model_architecture == 'bpnet':
+                revcomp_batch_preds_profile = np.array(revcomp_batch_preds[0])
+                revcomp_profiles.extend(revcomp_batch_preds_profile.reshape((revcomp_batch_preds_profile.shape[0],revcomp_batch_preds_profile.shape[1]*revcomp_batch_preds_profile.shape[2],1),order="F"))
 
         peak_ids.extend(batch_peak_ids)
 
@@ -140,7 +159,7 @@ def fetch_peak_predictions(model, peaks, input_len, genome_fasta, batch_size, de
     else:
         return peak_ids,pred_counts,pred_profiles
 
-def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, batch_size, debug_mode=False, lite=False, shuf=False, forward_only=False):
+def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, batch_size, model_architecture, debug_mode=False, shuf=False, forward_only=False):
     variant_ids = []
     allele1_pred_counts = []
     allele2_pred_counts = []
@@ -166,7 +185,13 @@ def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, ba
         revcomp_allele1_seqs = allele1_seqs[:, ::-1, ::-1]
         revcomp_allele2_seqs = allele2_seqs[:, ::-1, ::-1]
 
-        if lite:
+        if model_architecture == 'chrombpnet':
+            allele1_batch_preds = model.predict(allele1_seqs, verbose=False)
+            allele2_batch_preds = model.predict(allele2_seqs, verbose=False)
+            if not forward_only:
+                revcomp_allele1_batch_preds = model.predict(revcomp_allele1_seqs, verbose=False)
+                revcomp_allele2_batch_preds = model.predict(revcomp_allele2_seqs, verbose=False)
+        elif model_architecture == 'chrombpnet-lite':
             allele1_batch_preds = model.predict([allele1_seqs,
                                                  np.zeros((len(allele1_seqs), model.output_shape[0][1])),
                                                  np.zeros((len(allele1_seqs), ))],
@@ -175,7 +200,6 @@ def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, ba
                                                  np.zeros((len(allele2_seqs), model.output_shape[0][1])),
                                                  np.zeros((len(allele2_seqs), ))],
                                                 verbose=False)
-
             if not forward_only:
                 revcomp_allele1_batch_preds = model.predict([revcomp_allele1_seqs,
                                                      np.zeros((len(revcomp_allele1_seqs), model.output_shape[0][1])),
@@ -185,27 +209,58 @@ def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, ba
                                          np.zeros((len(revcomp_allele2_seqs), model.output_shape[0][1])),
                                          np.zeros((len(revcomp_allele2_seqs), ))],
                                         verbose=False)
-        else:
-            allele1_batch_preds = model.predict(allele1_seqs, verbose=False)
-            allele2_batch_preds = model.predict(allele2_seqs, verbose=False)
+        elif model_architecture == 'bpnet':
+            print("fetch_variant_prediction, bpnet")
+            allele1_batch_preds = model.predict([allele1_seqs,
+                                                 np.zeros((len(allele1_seqs), model.output_shape[0][1], 2)),
+                                                 np.zeros((len(allele1_seqs), 2))],
+                                                verbose=False)
+            allele2_batch_preds = model.predict([allele2_seqs,
+                                                 np.zeros((len(allele2_seqs), model.output_shape[0][1], 2)),
+                                                 np.zeros((len(allele2_seqs), 2))],
+                                                verbose=False)
             if not forward_only:
-                revcomp_allele1_batch_preds = model.predict(revcomp_allele1_seqs, verbose=False)
-                revcomp_allele2_batch_preds = model.predict(revcomp_allele2_seqs, verbose=False)
+                revcomp_allele1_batch_preds = model.predict([revcomp_allele1_seqs,
+                                                     np.zeros((len(revcomp_allele1_seqs), model.output_shape[0][1], 2)),
+                                                     np.zeros((len(revcomp_allele1_seqs), 2))],
+                                                    verbose=False)
+                revcomp_allele2_batch_preds = model.predict([revcomp_allele2_seqs,
+                                         np.zeros((len(revcomp_allele2_seqs), model.output_shape[0][1], 2)),
+                                         np.zeros((len(revcomp_allele2_seqs), 2))],
+                                        verbose=False)
+        else:
+            raise ValueError(f"Model architecture {model_architecture} not supported")
 
         allele1_batch_preds[1] = np.array([allele1_batch_preds[1][i] for i in range(len(allele1_batch_preds[1]))])
         allele2_batch_preds[1] = np.array([allele2_batch_preds[1][i] for i in range(len(allele2_batch_preds[1]))])
         allele1_pred_counts.extend(np.exp(allele1_batch_preds[1]))
         allele2_pred_counts.extend(np.exp(allele2_batch_preds[1]))
-        allele1_pred_profiles.extend(np.array(allele1_batch_preds[0]))   # np.squeeze(softmax()) to get probability profile
-        allele2_pred_profiles.extend(np.array(allele2_batch_preds[0]))
+        if model.architecture in ['chrombpnet', 'chrombpnet-lite']:
+            allele1_pred_profiles.extend(np.array(allele1_batch_preds[0]))   # np.squeeze(softmax()) to get probability profile
+            allele2_pred_profiles.extend(np.array(allele2_batch_preds[0]))
+        elif model.architecture == 'bpnet':
+            allele1_batch_preds_profile = np.array(allele1_batch_preds[0])
+            allele2_batch_preds_profile = np.array(allele2_batch_preds[0])
+            allele1_pred_profiles.extend(allele1_batch_preds_profile.reshape((allele1_batch_preds_profile.shape[0],allele1_batch_preds_profile.shape[1]*allele1_batch_preds_profile.shape[2],1),order="F"))
+            allele2_pred_profiles.extend(allele2_batch_preds_profile.reshape((allele2_batch_preds_profile.shape[0],allele2_batch_preds_profile.shape[1]*allele2_batch_preds_profile.shape[2],1),order="F"))
+        else:
+            raise ValueError(f"Model architecture {model_architecture} not supported")
 
         if not forward_only:
             revcomp_allele1_batch_preds[1] = np.array([revcomp_allele1_batch_preds[1][i] for i in range(len(revcomp_allele1_batch_preds[1]))])
             revcomp_allele2_batch_preds[1] = np.array([revcomp_allele2_batch_preds[1][i] for i in range(len(revcomp_allele2_batch_preds[1]))])
             revcomp_allele1_pred_counts.extend(np.exp(revcomp_allele1_batch_preds[1]))
             revcomp_allele2_pred_counts.extend(np.exp(revcomp_allele2_batch_preds[1]))
-            revcomp_allele1_pred_profiles.extend(np.array(revcomp_allele1_batch_preds[0]))   # np.squeeze(softmax()) to get probability profile
-            revcomp_allele2_pred_profiles.extend(np.array(revcomp_allele2_batch_preds[0]))
+            if model.architecture in ['chrombpnet', 'chrombpnet-lite']:
+                revcomp_allele1_pred_profiles.extend(np.array(revcomp_allele1_batch_preds[0]))
+                revcomp_allele2_pred_profiles.extend(np.array(revcomp_allele2_batch_preds[0]))
+            elif model.architecture == 'bpnet':
+                revcomp_allele1_batch_preds_profile = np.array(revcomp_allele1_batch_preds[0])
+                revcomp_allele2_batch_preds_profile = np.array(revcomp_allele2_batch_preds[0])
+                revcomp_allele1_pred_profiles.extend(revcomp_allele1_batch_preds_profile.reshape((revcomp_allele1_batch_preds_profile.shape[0],revcomp_allele1_batch_preds_profile.shape[1]*revcomp_allele1_batch_preds_profile.shape[2],1),order="F"))
+                revcomp_allele2_pred_profiles.extend(revcomp_allele2_batch_preds_profile.reshape((revcomp_allele2_batch_preds_profile.shape[0],revcomp_allele2_batch_preds_profile.shape[1]*revcomp_allele2_batch_preds_profile.shape[2],1),order="F"))
+            else:
+                raise ValueError(f"Model architecture {model_architecture} not supported")
 
         variant_ids.extend(batch_variant_ids)
 

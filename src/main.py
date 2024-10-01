@@ -103,19 +103,19 @@ shared_annotate_args = {
 }
 subcommand_args = {
 	"score": {
-		"help": "Gather variant effect information (i.e. \"scores\") from running variants through ChromBPNet, a chromatin accessibility model.",
+		"help": "Generate variant effect predictions (i.e. \"scores\") from a given model architecture.",
 		"function": variant_scoring.main,
 		"args": {
 			("-l", "--variant-list"): { "type": str, "help": "a TSV file containing a list of variants to score.", "required": True},
 			("-g", "--genome"): {"type": str, "help": "Genome fasta.", "required": True},
-			("-m", "--model-path"): {"type": str, "help": "ChromBPNet model to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
+			("-m", "--model-path"): {"type": str, "help": "The path of the model file to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
+			("-ma", "--model-architecture"): {"type": str, "help": "The name of the model architecture to be used for predictions. Currently supports: ['bpnet', 'chrombpnet', 'chrombpnet-lite'].", "default": "chrombpnet"},
 			("-o", "--score-output-path-prefix"): {"type": str, "help": 'A string that will be prefixed to the outputs of the `score` subcommand, to form a valid path to be written to. Should contain information relevant to the project, subcommand, model, and fold, if relevant. Used in this way: "<output-path-prefix><output-file-suffix>". Example usage: `--score-output-path-prefix /projects/score/adipocytes/fold_0/` will output to paths like /projects/score/adipocytes/fold_0/variant_scores.tsv.', "required": True},
 			("-s", "--chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes", "required": True},
 			("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
 			("-ps", "--peak-chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes for peak genome."},
 			("-pg", "--peak-genome"): {"type": str, "help": "Genome fasta for peaks."},
 			("-b", "--bias"): {"type": str, "help": "Bias model to use for variant scoring."},
-			("-li", "--lite"): {"action": "store_true", "help": "Models were trained with chrombpnet-lite."},
 			("-dm", "--debug-mode"): {"action": "store_true", "help": "Display allele input sequences."},
 			("-bs", "--batch-size"): {"type": int, "default": 512, "help": "Batch size to use for the model."},
 			("-p", "--peaks"): {"type": str, "help": "Bed file containing peak regions."},
