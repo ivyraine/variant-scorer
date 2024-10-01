@@ -20,7 +20,9 @@ from multiprocessing import Pool
 
 DEFAULT_ADASTRA_THREADS = 4
 MODEL_ID_COL = 'model_id'
+FOLD_COL = 'fold'
 PEAKS_PATH_COL = 'peaks_path'
+SCORE_OUT_PATH_COL = 'score_output_path'
 SUMMARIZE_OUT_PATH_COL = 'summarize_output_path'
 ANNOTATE_SUMM_OUT_PATH_COL = 'annotate_summ_output_path'
 AGGREGATE_OUT_PATH_COL = 'aggregate_output_path'

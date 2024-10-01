@@ -9,7 +9,7 @@ import logging
 
 import argparse
 from os.path import isfile
-from utils.helpers import MODEL_ID_COL, PEAKS_PATH_COL, SUMMARIZE_OUT_PATH_COL, ANNOTATE_SUMM_OUT_PATH_COL, AGGREGATE_OUT_PATH_COL, ANNOTATE_AGGR_OUT_PATH_COL
+from utils.helpers import MODEL_ID_COL, FOLD_COL, PEAKS_PATH_COL, SCORE_OUT_PATH_COL, SUMMARIZE_OUT_PATH_COL, ANNOTATE_SUMM_OUT_PATH_COL, AGGREGATE_OUT_PATH_COL, ANNOTATE_AGGR_OUT_PATH_COL
 
 class ClosestElementsAction(argparse.Action):
 	def __call__(self, parser, namespace, values, option_string=None):
@@ -138,6 +138,7 @@ subcommand_args = {
 		"args": {
 			("-i", "--score-output-paths"): { "nargs": '+', "help": "A (space-separated) list of variant score file paths (generally, each from a different fold) to be summarized together, generated from the `score` subcommand. Used like so: `--score-output-paths /projects/score/adipocytes/fold_0/variant_scores.tsv /projects/score/adipocytes/fold_1/variant_scores.tsv /projects/score/adipocytes/fold_2/variant_scores.tsv ...`."},
 			("-o", "--summarize-output-path"): { "type": str, "help": 'A string representing the output file path of the `summarize` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--summarize-output-path /projects/summarize/adipocytes/mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/mean.variant_scores.tsv.'},
+			("-im", "--input-metadata"): {"type": str, "help": f'A TSV file containing at least these three required columns for this subcommand: "{MODEL_ID_COL}", "{FOLD_COL}", "{SCORE_OUT_PATH_COL}" "{SUMMARIZE_OUT_PATH_COL}".'},
 			("-sc", "--schema"): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
 			("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 		},
@@ -150,11 +151,6 @@ subcommand_args = {
 			("-o", "--annotate-summ-output-path"): { "type": str, "help": 'A string representing the output file path of the `annotate-summ` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--annotate-summ-output-path /projects/annotate_summ/adipocytes/annotated.mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/annotated.mean.variant_scores.tsv. It is recommended to use --input-metadata instead of this flag.'},
 			("-im", "--input-metadata"): {"type": str, "help": f'A TSV file containing at least these three required columns for this subcommand: "{MODEL_ID_COL}", "{SUMMARIZE_OUT_PATH_COL}", "{ANNOTATE_SUMM_OUT_PATH_COL}", and "{PEAKS_PATH_COL}" (if using peaks for annotations).'},
 			("-p", "--peaks"): {"nargs": "?", "type": str, "const": True, "default": None, "help": "Adds overlapping peaks annotation 'peak_overlap'. If the --input-metadata option isn't provided (with a 'peaks_path' column), this flag requires a path of the bed file containing peak regions."},
-			# TODO add a retain-only flag, to keep specified columns only
-			# ("-lo", "--filter-lower"): {"type": str, "nargs": "+", "help": "Removes all variants from the annotations list containing a field(s) with a value greater than or equal to the specified threshold(s). This flag accepts a list of pairs, where each pair contains the field and value delimited by a colon. By default this flag is set to `-lo abs_logfc.mean.pval:0.01 jsd.mean.pval:0.01`", "default": ["abs_logfc.mean.pval:0.01", "jsd.mean.pval:0.01"]},
-			# ("-up", "--filter-upper"): {"type": str, "nargs": "+", "help": "Removes all variants from the annotations list containing a field(s) with a value lower than or equal to the specified threshold(s). This flag accepts a list of pairs, where each pair contains the field and value delimited by a colon. An example of this flag would be: `-up field1:0.5 field2:0.1`."},
-			# ("-fl", "--filter-logic"): {"type": str, "choices": ["and", "or"], "default": "and", "help": "The logic to use when filtering variants based on the filter-lower and filter-upper flags, excluding --max-percentile-threshold and --peak-variants-only, which always use 'and' logic. The default is 'and', which means that a variant will be removed if it fails any of the filter conditions. If set to 'or', a variant will be removed if it fails all of the filter conditions."},
-			# ("-mpt", "--max-percentile-threshold"): {"type": float, "help": "Removes all variants from the annotations list whose max_percentile.mean (generated from running the scoring step with the -p flag, followed by the summary step) is less than or equal to the specified threshold, and always uses 'and' threshold logic. The default is 0.05.", "default": 0.05},
 		}, **shared_annotate_args},
 	},
 	"aggregate": {
