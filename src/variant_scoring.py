@@ -173,10 +173,7 @@ def main(args = None, filter_dir_override = None):
         assert shuf_variants_table["abs_logfc"].shape == shuf_jsd.shape
         assert shuf_variants_table["abs_logfc"].shape == shuf_variants_table["abs_logfc_x_jsd"].shape
 
-        print()
-        print(shuf_variants_table.head())
-        print("Shuffled score table shape:", shuf_variants_table.shape)
-        print()
+        logging.debug("Shuffled score table shape:", shuf_variants_table.shape, shuf_variants_table.head())
         shuf_variants_table.to_csv(shuf_scores_file, sep="\t", index=False)
 
     else:
@@ -220,129 +217,146 @@ def main(args = None, filter_dir_override = None):
         print("Debug variants table shape:", variants_table.shape)
         print()
 
-    # fetch model prediction for variants
-    variant_ids, allele1_pred_counts, allele2_pred_counts, \
-    allele1_pred_profiles, allele2_pred_profiles = fetch_variant_predictions(model,
-                                                                        variants_table,
-                                                                        input_len,
-                                                                        args.genome,
-                                                                        args.batch_size,
-                                                                        model_architecture=args.model_architecture,
-                                                                        debug_mode=args.debug_mode,
-                                                                        shuf=False,
-                                                                        forward_only=args.forward_only)
+    todo_chroms = [x for x in variants_table.chr.unique()] if args.split_per_chromosome else ['all']
 
-    if args.peaks:
-        logfc, jsd, \
-        allele1_quantile, allele2_quantile = get_variant_scores_with_peaks(allele1_pred_counts,
-                                                                                allele2_pred_counts,
-                                                                                allele1_pred_profiles,
-                                                                                allele2_pred_profiles,
-                                                                                np.array(peaks["peak_score"].tolist()))
-    else:
-        logfc, jsd = get_variant_scores(allele1_pred_counts,
-                                        allele2_pred_counts,
-                                        allele1_pred_profiles,
-                                        allele2_pred_profiles)
+    for chrom in todo_chroms:
 
-    indel_idx, adjusted_jsd_list = adjust_indel_jsd(variants_table,allele1_pred_profiles,allele2_pred_profiles,jsd)
-    has_indel_variants = (len(indel_idx) > 0)
+        logging.info(f'Processing {chrom} variants')
+        output_tsv = get_score_file_path(args.score_output_path_prefix, chr=chrom)
+        if args.split_per_chromosome:
+            curr_variants_table = variants_table.loc[variants_table['chr'] == chrom].sort_values(by='pos').copy()
+            curr_variants_table.reset_index(drop=True, inplace=True)
 
-    assert np.array_equal(variants_table["variant_id"].tolist(), variant_ids)
-    variants_table["allele1_pred_counts"] = allele1_pred_counts
-    variants_table["allele2_pred_counts"] = allele2_pred_counts
-    variants_table["logfc"] = logfc
-    variants_table["abs_logfc"] = np.abs(variants_table["logfc"])
-    if has_indel_variants:
-        variants_table["jsd"] = adjusted_jsd_list
-    else:
-        variants_table["jsd"] = jsd
-        assert np.array_equal(adjusted_jsd_list, jsd)
-    variants_table["original_jsd"] = jsd
-    variants_table["logfc_x_jsd"] = variants_table["logfc"] * variants_table["jsd"]
-    variants_table["abs_logfc_x_jsd"] = variants_table["abs_logfc"] * variants_table["jsd"]
+            if os.path.isfile(output_tsv):
+                curr_variants_table_loaded = pd.read_table(output_tsv)
+                if curr_variants_table_loaded['variant_id'].tolist() == curr_variants_table['variant_id'].tolist():
+                    logging.info(f"Skipping {chrom} as the {output_tsv} already exists")
+                    continue
+        else:
+            curr_variants_table = variants_table
 
-    if len(shuf_variants_table) > 0:
-        variants_table["logfc.pval"] = get_pvals(variants_table["logfc"].tolist(), shuf_variants_table["logfc"], tail="both")
-        variants_table["abs_logfc.pval"] = get_pvals(variants_table["abs_logfc"].tolist(), shuf_variants_table["abs_logfc"], tail="right")
-        variants_table["jsd.pval"] = get_pvals(variants_table["jsd"].tolist(), shuf_variants_table["jsd"], tail="right")
-        variants_table["logfc_x_jsd.pval"] = get_pvals(variants_table["logfc_x_jsd"].tolist(), shuf_variants_table["logfc_x_jsd"], tail="both")
-        variants_table["abs_logfc_x_jsd.pval"] = get_pvals(variants_table["abs_logfc_x_jsd"].tolist(), shuf_variants_table["abs_logfc_x_jsd"], tail="right")
-    if args.peaks:
-        variants_table["allele1_quantile"] = allele1_quantile
-        variants_table["allele2_quantile"] = allele2_quantile
-        variants_table["active_allele_quantile"] = variants_table[["allele1_quantile", "allele2_quantile"]].max(axis=1)
-        variants_table["quantile_change"] = variants_table["allele2_quantile"] - variants_table["allele1_quantile"]
-        variants_table["abs_quantile_change"] = np.abs(variants_table["quantile_change"])
-        variants_table["logfc_x_active_allele_quantile"] = variants_table["logfc"] * variants_table["active_allele_quantile"]
-        variants_table["abs_logfc_x_active_allele_quantile"] = variants_table["abs_logfc"] * variants_table["active_allele_quantile"]
-        variants_table["jsd_x_active_allele_quantile"] = variants_table["jsd"] * variants_table["active_allele_quantile"]
-        variants_table["logfc_x_jsd_x_active_allele_quantile"] = variants_table["logfc_x_jsd"] * variants_table["active_allele_quantile"]
-        variants_table["abs_logfc_x_jsd_x_active_allele_quantile"] = variants_table["abs_logfc_x_jsd"] * variants_table["active_allele_quantile"]
+        # fetch model prediction for variants
+        variant_ids, allele1_pred_counts, allele2_pred_counts, \
+        allele1_pred_profiles, allele2_pred_profiles = fetch_variant_predictions(model,
+                                                                            curr_variants_table,
+                                                                            input_len,
+                                                                            args.genome,
+                                                                            args.batch_size,
+                                                                            model_architecture=args.model_architecture,
+                                                                            debug_mode=args.debug_mode,
+                                                                            shuf=False,
+                                                                            forward_only=args.forward_only)
+
+        if args.peaks:
+            logfc, jsd, \
+            allele1_quantile, allele2_quantile = get_variant_scores_with_peaks(allele1_pred_counts,
+                                                                                    allele2_pred_counts,
+                                                                                    allele1_pred_profiles,
+                                                                                    allele2_pred_profiles,
+                                                                                    np.array(peaks["peak_score"].tolist()))
+        else:
+            logfc, jsd = get_variant_scores(allele1_pred_counts,
+                                            allele2_pred_counts,
+                                            allele1_pred_profiles,
+                                            allele2_pred_profiles)
+
+        indel_idx, adjusted_jsd_list = adjust_indel_jsd(curr_variants_table,allele1_pred_profiles,allele2_pred_profiles,jsd)
+        has_indel_variants = (len(indel_idx) > 0)
+
+        assert np.array_equal(curr_variants_table["variant_id"].tolist(), variant_ids)
+        curr_variants_table["allele1_pred_counts"] = allele1_pred_counts
+        curr_variants_table["allele2_pred_counts"] = allele2_pred_counts
+        curr_variants_table["logfc"] = logfc
+        curr_variants_table["abs_logfc"] = np.abs(curr_variants_table["logfc"])
+        if has_indel_variants:
+            curr_variants_table["jsd"] = adjusted_jsd_list
+        else:
+            curr_variants_table["jsd"] = jsd
+            assert np.array_equal(adjusted_jsd_list, jsd)
+        curr_variants_table["original_jsd"] = jsd
+        curr_variants_table["logfc_x_jsd"] = curr_variants_table["logfc"] * curr_variants_table["jsd"]
+        curr_variants_table["abs_logfc_x_jsd"] = curr_variants_table["abs_logfc"] * curr_variants_table["jsd"]
 
         if len(shuf_variants_table) > 0:
-            variants_table["active_allele_quantile.pval"] = get_pvals(variants_table["active_allele_quantile"].tolist(),
-                                                                shuf_variants_table["active_allele_quantile"], tail="right")
-            variants_table['quantile_change.pval'] = get_pvals(variants_table["quantile_change"].tolist(),
-                                                                    shuf_variants_table["quantile_change"], tail="both")
-            variants_table["abs_quantile_change.pval"] = get_pvals(variants_table["abs_quantile_change"].tolist(),
-                                                                        shuf_variants_table["abs_quantile_change"], tail="right")
-            variants_table["logfc_x_active_allele_quantile.pval"] = get_pvals(variants_table["logfc_x_active_allele_quantile"].tolist(),
-                                                                        shuf_variants_table["logfc_x_active_allele_quantile"], tail="both")
-            variants_table["abs_logfc_x_active_allele_quantile.pval"] = get_pvals(variants_table["abs_logfc_x_active_allele_quantile"].tolist(),
-                                                                            shuf_variants_table["abs_logfc_x_active_allele_quantile"], tail="right")
-            variants_table["jsd_x_active_allele_quantile.pval"] = get_pvals(variants_table["jsd_x_active_allele_quantile"].tolist(),
-                                                                    shuf_variants_table["jsd_x_active_allele_quantile"], tail="right")
-            variants_table["logfc_x_jsd_x_active_allele_quantile.pval"] = get_pvals(variants_table["logfc_x_jsd_x_active_allele_quantile"].tolist(),
-                                                                            shuf_variants_table["logfc_x_jsd_x_active_allele_quantile"], tail="both")
-            variants_table["abs_logfc_x_jsd_x_active_allele_quantile.pval"] = get_pvals(variants_table["abs_logfc_x_jsd_x_active_allele_quantile"].tolist(),
-                                                                                shuf_variants_table["abs_logfc_x_jsd_x_active_allele_quantile"], tail="right")
+            curr_variants_table["logfc.pval"] = get_pvals(curr_variants_table["logfc"].tolist(), shuf_variants_table["logfc"], tail="both")
+            curr_variants_table["abs_logfc.pval"] = get_pvals(curr_variants_table["abs_logfc"].tolist(), shuf_variants_table["abs_logfc"], tail="right")
+            curr_variants_table["jsd.pval"] = get_pvals(curr_variants_table["jsd"].tolist(), shuf_variants_table["jsd"], tail="right")
+            curr_variants_table["logfc_x_jsd.pval"] = get_pvals(curr_variants_table["logfc_x_jsd"].tolist(), shuf_variants_table["logfc_x_jsd"], tail="both")
+            curr_variants_table["abs_logfc_x_jsd.pval"] = get_pvals(curr_variants_table["abs_logfc_x_jsd"].tolist(), shuf_variants_table["abs_logfc_x_jsd"], tail="right")
+        if args.peaks:
+            curr_variants_table["allele1_quantile"] = allele1_quantile
+            curr_variants_table["allele2_quantile"] = allele2_quantile
+            curr_variants_table["active_allele_quantile"] = curr_variants_table[["allele1_quantile", "allele2_quantile"]].max(axis=1)
+            curr_variants_table["quantile_change"] = curr_variants_table["allele2_quantile"] - curr_variants_table["allele1_quantile"]
+            curr_variants_table["abs_quantile_change"] = np.abs(curr_variants_table["quantile_change"])
+            curr_variants_table["logfc_x_active_allele_quantile"] = curr_variants_table["logfc"] * curr_variants_table["active_allele_quantile"]
+            curr_variants_table["abs_logfc_x_active_allele_quantile"] = curr_variants_table["abs_logfc"] * curr_variants_table["active_allele_quantile"]
+            curr_variants_table["jsd_x_active_allele_quantile"] = curr_variants_table["jsd"] * curr_variants_table["active_allele_quantile"]
+            curr_variants_table["logfc_x_jsd_x_active_allele_quantile"] = curr_variants_table["logfc_x_jsd"] * curr_variants_table["active_allele_quantile"]
+            curr_variants_table["abs_logfc_x_jsd_x_active_allele_quantile"] = curr_variants_table["abs_logfc_x_jsd"] * curr_variants_table["active_allele_quantile"]
 
-    if args.schema == "bed":
-        variants_table['pos'] = variants_table['pos'] - 1
+            if len(shuf_variants_table) > 0:
+                curr_variants_table["active_allele_quantile.pval"] = get_pvals(curr_variants_table["active_allele_quantile"].tolist(),
+                                                                    shuf_variants_table["active_allele_quantile"], tail="right")
+                curr_variants_table['quantile_change.pval'] = get_pvals(curr_variants_table["quantile_change"].tolist(),
+                                                                        shuf_variants_table["quantile_change"], tail="both")
+                curr_variants_table["abs_quantile_change.pval"] = get_pvals(curr_variants_table["abs_quantile_change"].tolist(),
+                                                                            shuf_variants_table["abs_quantile_change"], tail="right")
+                curr_variants_table["logfc_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["logfc_x_active_allele_quantile"].tolist(),
+                                                                            shuf_variants_table["logfc_x_active_allele_quantile"], tail="both")
+                curr_variants_table["abs_logfc_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["abs_logfc_x_active_allele_quantile"].tolist(),
+                                                                                shuf_variants_table["abs_logfc_x_active_allele_quantile"], tail="right")
+                curr_variants_table["jsd_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["jsd_x_active_allele_quantile"].tolist(),
+                                                                        shuf_variants_table["jsd_x_active_allele_quantile"], tail="right")
+                curr_variants_table["logfc_x_jsd_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["logfc_x_jsd_x_active_allele_quantile"].tolist(),
+                                                                                shuf_variants_table["logfc_x_jsd_x_active_allele_quantile"], tail="both")
+                curr_variants_table["abs_logfc_x_jsd_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["abs_logfc_x_jsd_x_active_allele_quantile"].tolist(),
+                                                                                    shuf_variants_table["abs_logfc_x_jsd_x_active_allele_quantile"], tail="right")
 
-    logging.info(f"Output score table:\n{variants_table.head()}\n{variants_table.shape}")
+        if args.schema == "bed":
+            curr_variants_table['pos'] = curr_variants_table['pos'] - 1
 
-    output_tsv = get_score_file_path(args.score_output_path_prefix)
+        logging.info(f"Output score table:\n{curr_variants_table.head()}\n{curr_variants_table.shape}")
 
-    variants_table.to_csv(output_tsv, sep="\t", index=False)
+        print(f"writing to {output_tsv}")
+        curr_variants_table.to_csv(output_tsv, sep="\t", index=False)
 
-    # store predictions at variants
-    if hasattr(args, "no_hdf5") and not args.no_hdf5 or filter_dir_override is not None:
-        output_h5 = get_profiles_file_path(args.score_output_path_prefix)
-        with h5py.File(output_h5, 'w') as f:
-            observed = f.create_group('observed')
-            # Print shapes
-            observed.create_dataset('allele1_pred_counts', data=allele1_pred_counts, compression='gzip', compression_opts=9)
-            observed.create_dataset('allele2_pred_counts', data=allele2_pred_counts, compression='gzip', compression_opts=9)
-            observed.create_dataset('allele1_pred_profiles', data=allele1_pred_profiles, compression='gzip', compression_opts=9)
-            observed.create_dataset('allele2_pred_profiles', data=allele2_pred_profiles, compression='gzip', compression_opts=9)
-            variant_ids_encoded = variant_ids.astype(h5py.string_dtype(encoding='utf-8'))
-            # Unencode it
-            # variant_ids_decoded = [x.decode('utf-8') for x in variant_ids_encoded]
-            # print(variant_ids_decoded)
-            observed.create_dataset('variant_ids', data=variant_ids_encoded, compression='gzip', compression_opts=9)
-            # if len(shuf_variants_table) > 0:
-            #     shuffled = f.create_group('shuffled')
-            #     shuffled.create_dataset('shuf_allele1_pred_counts', data=shuf_allele1_pred_counts, compression='gzip', compression_opts=9)
-            #     shuffled.create_dataset('shuf_allele2_pred_counts', data=shuf_allele2_pred_counts, compression='gzip', compression_opts=9)
-            #     shuffled.create_dataset('shuf_logfc', data=shuf_logfc, compression='gzip', compression_opts=9)
-            #     shuffled.create_dataset('shuf_abs_logfc', data=shuf_abs_logfc, compression='gzip', compression_opts=9)
-            #     shuffled.create_dataset('shuf_jsd', data=shuf_jsd, compression='gzip', compression_opts=9)
-            #     shuffled.create_dataset('shuf_logfc_x_jsd', data=shuf_logfc_jsd, compression='gzip', compression_opts=9)
-            #     shuffled.create_dataset('shuf_abs_logfc_x_jsd', data=shuf_abs_logfc_jsd, compression='gzip', compression_opts=9)
-            #     if args.peaks:
-            #         shuffled.create_dataset('shuf_max_percentile', data=shuf_max_percentile, compression='gzip', compression_opts=9)
-            #         shuffled.create_dataset('shuf_percentile_change', data=shuf_percentile_change, compression='gzip', compression_opts=9)
-            #         shuffled.create_dataset('shuf_abs_percentile_change', data=shuf_abs_percentile_change, compression='gzip', compression_opts=9)
-            #         shuffled.create_dataset('shuf_logfc_x_max_percentile', data=shuf_logfc_max_percentile, compression='gzip', compression_opts=9)
-            #         shuffled.create_dataset('shuf_abs_logfc_max_percentile', data=shuf_abs_logfc_max_percentile, compression='gzip', compression_opts=9)
-            #         shuffled.create_dataset('shuf_jsd_max_percentile', data=shuf_jsd_max_percentile, compression='gzip', compression_opts=9)
-            #         shuffled.create_dataset('shuf_logfc_x_jsd_x_max_percentile', data=shuf_logfc_jsd_max_percentile, compression='gzip', compression_opts=9)
-            #         shuffled.create_dataset('shuf_abs_logfc_x_jsd_x_max_percentile', data=shuf_abs_logfc_jsd_max_percentile, compression='gzip', compression_opts=9)
-        logging.info(f"Finished scoring and saved to {output_tsv} and {output_h5}")
-    else:
-        logging.info(f"Finished scoring and saved to {output_tsv}")
+        # store predictions at variants
+        if hasattr(args, "no_hdf5") and not args.no_hdf5 or filter_dir_override is not None:
+            output_h5 = get_profiles_file_path(args.score_output_path_prefix, chrom)
+            with h5py.File(output_h5, 'w') as f:
+                observed = f.create_group('observed')
+                # Print shapes
+                observed.create_dataset('allele1_pred_counts', data=allele1_pred_counts, compression='gzip', compression_opts=9)
+                observed.create_dataset('allele2_pred_counts', data=allele2_pred_counts, compression='gzip', compression_opts=9)
+                observed.create_dataset('allele1_pred_profiles', data=allele1_pred_profiles, compression='gzip', compression_opts=9)
+                observed.create_dataset('allele2_pred_profiles', data=allele2_pred_profiles, compression='gzip', compression_opts=9)
+                variant_ids_encoded = variant_ids.astype(h5py.string_dtype(encoding='utf-8'))
+                # Unencode it
+                # variant_ids_decoded = [x.decode('utf-8') for x in variant_ids_encoded]
+                # print(variant_ids_decoded)
+                observed.create_dataset('variant_ids', data=variant_ids_encoded, compression='gzip', compression_opts=9)
+                # if len(shuf_variants_table) > 0:
+                #     shuffled = f.create_group('shuffled')
+                #     shuffled.create_dataset('shuf_allele1_pred_counts', data=shuf_allele1_pred_counts, compression='gzip', compression_opts=9)
+                #     shuffled.create_dataset('shuf_allele2_pred_counts', data=shuf_allele2_pred_counts, compression='gzip', compression_opts=9)
+                #     shuffled.create_dataset('shuf_logfc', data=shuf_logfc, compression='gzip', compression_opts=9)
+                #     shuffled.create_dataset('shuf_abs_logfc', data=shuf_abs_logfc, compression='gzip', compression_opts=9)
+                #     shuffled.create_dataset('shuf_jsd', data=shuf_jsd, compression='gzip', compression_opts=9)
+                #     shuffled.create_dataset('shuf_logfc_x_jsd', data=shuf_logfc_jsd, compression='gzip', compression_opts=9)
+                #     shuffled.create_dataset('shuf_abs_logfc_x_jsd', data=shuf_abs_logfc_jsd, compression='gzip', compression_opts=9)
+                #     if args.peaks:
+                #         shuffled.create_dataset('shuf_max_percentile', data=shuf_max_percentile, compression='gzip', compression_opts=9)
+                #         shuffled.create_dataset('shuf_percentile_change', data=shuf_percentile_change, compression='gzip', compression_opts=9)
+                #         shuffled.create_dataset('shuf_abs_percentile_change', data=shuf_abs_percentile_change, compression='gzip', compression_opts=9)
+                #         shuffled.create_dataset('shuf_logfc_x_max_percentile', data=shuf_logfc_max_percentile, compression='gzip', compression_opts=9)
+                #         shuffled.create_dataset('shuf_abs_logfc_max_percentile', data=shuf_abs_logfc_max_percentile, compression='gzip', compression_opts=9)
+                #         shuffled.create_dataset('shuf_jsd_max_percentile', data=shuf_jsd_max_percentile, compression='gzip', compression_opts=9)
+                #         shuffled.create_dataset('shuf_logfc_x_jsd_x_max_percentile', data=shuf_logfc_jsd_max_percentile, compression='gzip', compression_opts=9)
+                #         shuffled.create_dataset('shuf_abs_logfc_x_jsd_x_max_percentile', data=shuf_abs_logfc_jsd_max_percentile, compression='gzip', compression_opts=9)
+            logging.info(f"Finished scoring {chrom}. Saved to {output_tsv} and {output_h5}")
+        else:
+            logging.info(f"Finished scoring {chrom}. Saved to {output_tsv}")
 
 
 if __name__ == "__main__":

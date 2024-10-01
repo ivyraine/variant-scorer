@@ -235,10 +235,10 @@ def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, ba
         allele2_batch_preds[1] = np.array([allele2_batch_preds[1][i] for i in range(len(allele2_batch_preds[1]))])
         allele1_pred_counts.extend(np.exp(allele1_batch_preds[1]))
         allele2_pred_counts.extend(np.exp(allele2_batch_preds[1]))
-        if model.architecture in ['chrombpnet', 'chrombpnet-lite']:
+        if model_architecture in ['chrombpnet', 'chrombpnet-lite']:
             allele1_pred_profiles.extend(np.array(allele1_batch_preds[0]))   # np.squeeze(softmax()) to get probability profile
             allele2_pred_profiles.extend(np.array(allele2_batch_preds[0]))
-        elif model.architecture == 'bpnet':
+        elif model_architecture == 'bpnet':
             allele1_batch_preds_profile = np.array(allele1_batch_preds[0])
             allele2_batch_preds_profile = np.array(allele2_batch_preds[0])
             allele1_pred_profiles.extend(allele1_batch_preds_profile.reshape((allele1_batch_preds_profile.shape[0],allele1_batch_preds_profile.shape[1]*allele1_batch_preds_profile.shape[2],1),order="F"))
@@ -251,10 +251,10 @@ def fetch_variant_predictions(model, variants_table, input_len, genome_fasta, ba
             revcomp_allele2_batch_preds[1] = np.array([revcomp_allele2_batch_preds[1][i] for i in range(len(revcomp_allele2_batch_preds[1]))])
             revcomp_allele1_pred_counts.extend(np.exp(revcomp_allele1_batch_preds[1]))
             revcomp_allele2_pred_counts.extend(np.exp(revcomp_allele2_batch_preds[1]))
-            if model.architecture in ['chrombpnet', 'chrombpnet-lite']:
+            if model_architecture in ['chrombpnet', 'chrombpnet-lite']:
                 revcomp_allele1_pred_profiles.extend(np.array(revcomp_allele1_batch_preds[0]))
                 revcomp_allele2_pred_profiles.extend(np.array(revcomp_allele2_batch_preds[0]))
-            elif model.architecture == 'bpnet':
+            elif model_architecture == 'bpnet':
                 revcomp_allele1_batch_preds_profile = np.array(revcomp_allele1_batch_preds[0])
                 revcomp_allele2_batch_preds_profile = np.array(revcomp_allele2_batch_preds[0])
                 revcomp_allele1_pred_profiles.extend(revcomp_allele1_batch_preds_profile.reshape((revcomp_allele1_batch_preds_profile.shape[0],revcomp_allele1_batch_preds_profile.shape[1]*revcomp_allele1_batch_preds_profile.shape[2],1),order="F"))
@@ -465,11 +465,11 @@ def add_missing_columns_to_peaks_df(peaks, schema):
 def get_score_dir(score_out_prefix):
     return os.path.dirname(score_out_prefix)
 
-def get_score_file_path(score_out_prefix, chr=None):
-    if chr is None:
+def get_score_file_path(score_out_prefix, chr='all'):
+    if chr is None or chr == 'all':
         return f"{score_out_prefix}variant_scores.tsv"
     else:
-        return f"{score_out_prefix}chr{str(chr)}.variant_scores.tsv"
+        return f"{score_out_prefix}{str(chr)}.variant_scores.tsv"
     
 def get_score_peaks_path(score_out_prefix):
     return f"{score_out_prefix}peak_scores.tsv"
@@ -477,8 +477,11 @@ def get_score_peaks_path(score_out_prefix):
 def get_score_shuffled_path(score_out_prefix):
     return f"{score_out_prefix}variant_scores.shuffled.tsv"
 
-def get_profiles_file_path(score_out_prefix):
-    return f"{score_out_prefix}variant_predictions.tsv"
+def get_profiles_file_path(score_out_prefix, chr='all'):
+    if chr is None or chr == 'all':
+        return f"{score_out_prefix}variant_predictions.tsv"
+    else:
+        return f"{score_out_prefix}{str(chr)}.variant_predictions.tsv"
 
 def get_annotate_output_file(annotate_dir, model_name):
     return f"{os.path.join(annotate_dir, model_name)}.annotations.tsv"

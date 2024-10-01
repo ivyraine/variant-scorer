@@ -115,6 +115,7 @@ subcommand_args = {
 			("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
 			("-ps", "--peak-chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes for peak genome."},
 			("-pg", "--peak-genome"): {"type": str, "help": "Genome fasta for peaks."},
+			("-pc", "--split-per-chromosome"): {"action": "store_true", "help": "Separates variant scores into separate files for each chromosome."},
 			("-b", "--bias"): {"type": str, "help": "Bias model to use for variant scoring."},
 			("-dm", "--debug-mode"): {"action": "store_true", "help": "Display allele input sequences."},
 			("-bs", "--batch-size"): {"type": int, "default": 512, "help": "Batch size to use for the model."},
