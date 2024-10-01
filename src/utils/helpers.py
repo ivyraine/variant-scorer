@@ -19,14 +19,15 @@ import tempfile
 from multiprocessing import Pool
 
 DEFAULT_ADASTRA_THREADS = 4
-MODEL_ID_COL = 'model_id'
+MODEL_ID_COL = 'model-id'
 FOLD_COL = 'fold'
-PEAKS_PATH_COL = 'peaks_path'
-SCORE_OUT_PATH_COL = 'score_output_path'
-SUMMARIZE_OUT_PATH_COL = 'summarize_output_path'
-ANNOTATE_SUMM_OUT_PATH_COL = 'annotate_summ_output_path'
-AGGREGATE_OUT_PATH_COL = 'aggregate_output_path'
-ANNOTATE_AGGR_OUT_PATH_COL = 'annotate_aggr_output_path'
+PEAKS_PATH_COL = 'peaks-path'
+SPLIT_PER_CHROMOSOME_COL = 'split-per-chromosome'
+SCORE_OUT_PATH_PREFIX_COL = 'score-output-path-prefix'
+SUMMARIZE_OUT_PATH_COL = 'summarize-output-path'
+ANNOTATE_SUMM_OUT_PATH_COL = 'annotate-summ-output-path'
+AGGREGATE_OUT_PATH_COL = 'aggregate-output-path'
+ANNOTATE_AGGR_OUT_PATH_COL = 'annotate-aggr-output-path'
 
 def get_variant_schema(schema):
     var_SCHEMA = {'original': ['chr', 'pos', 'variant_id', 'allele1', 'allele2'],

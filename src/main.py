@@ -9,7 +9,7 @@ import logging
 
 import argparse
 from os.path import isfile
-from utils.helpers import MODEL_ID_COL, FOLD_COL, PEAKS_PATH_COL, SCORE_OUT_PATH_COL, SUMMARIZE_OUT_PATH_COL, ANNOTATE_SUMM_OUT_PATH_COL, AGGREGATE_OUT_PATH_COL, ANNOTATE_AGGR_OUT_PATH_COL
+from utils.helpers import MODEL_ID_COL, FOLD_COL, PEAKS_PATH_COL, SCORE_OUT_PATH_PREFIX_COL, SPLIT_PER_CHROMOSOME_COL, SUMMARIZE_OUT_PATH_COL, ANNOTATE_SUMM_OUT_PATH_COL, AGGREGATE_OUT_PATH_COL, ANNOTATE_AGGR_OUT_PATH_COL
 
 class ClosestElementsAction(argparse.Action):
 	def __call__(self, parser, namespace, values, option_string=None):
@@ -136,10 +136,11 @@ subcommand_args = {
 		"help": "Summarize variant scores across folds.",
 		"function": variant_summary_across_folds.main,
 		"args": {
-			("-i", "--score-output-paths"): { "nargs": '+', "help": "A (space-separated) list of variant score file paths (generally, each from a different fold) to be summarized together, generated from the `score` subcommand. Used like so: `--score-output-paths /projects/score/adipocytes/fold_0/variant_scores.tsv /projects/score/adipocytes/fold_1/variant_scores.tsv /projects/score/adipocytes/fold_2/variant_scores.tsv ...`."},
+			("-i", "--score-output-path-prefixes"): { "nargs": '+', "help": "A (space-separated) list of variant score file paths prefixes (each for a different fold) to be summarized together, used in the `score` subcommand. Used like so: `--score-output-paths /projects/score/adipocytes/fold_0/ /projects/score/adipocytes/fold_1/ /projects/score/adipocytes/fold_2/ ...`."},
 			("-o", "--summarize-output-path"): { "type": str, "help": 'A string representing the output file path of the `summarize` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--summarize-output-path /projects/summarize/adipocytes/mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/mean.variant_scores.tsv.'},
-			("-im", "--input-metadata"): {"type": str, "help": f'A TSV file containing at least these three required columns for this subcommand: "{MODEL_ID_COL}", "{FOLD_COL}", "{SCORE_OUT_PATH_COL}" "{SUMMARIZE_OUT_PATH_COL}".'},
+			("-im", "--input-metadata"): {"type": str, "help": f'A TSV file containing at least these columns for this subcommand: "{SCORE_OUT_PATH_PREFIX_COL}", "{SUMMARIZE_OUT_PATH_COL}", and (optionally) {SPLIT_PER_CHROMOSOME_COL} (with values True or False).'},
 			("-sc", "--schema"): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
+			("-pc", "--split-per-chromosome"): {"action": "store_true", "help": "Merges all the variants split across chromosomes from the `score` subcommand for each fold, if provided. If using --input-metadata, you may instead create a 'split-per-chromosome' column with values True or False, for more fine-grained control."},
 			("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 		},
 	},
