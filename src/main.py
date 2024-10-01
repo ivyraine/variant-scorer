@@ -1,4 +1,3 @@
-from utils import argmanager
 import variant_scoring
 import variant_shap
 import variant_summary_across_folds
@@ -244,14 +243,6 @@ def get_args():
 	except argparse.ArgumentError:
 		parser.print_help()
 		parser.exit()
-
-
-	# subparser = subparsers.choices[args.subcommand]
-	# try:
-	# 	args = subparser.parse_args()
-	# except argparse.ArgumentError:
-	# 	subparser.print_help()
-	# 	subparser.exit()
 
 	return args
 

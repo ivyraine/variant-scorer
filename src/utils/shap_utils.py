@@ -17,7 +17,7 @@ import sys
 sys.path.append('..')
 from generators.variant_generator import VariantGenerator
 from generators.peak_generator import PeakGenerator
-from utils import argmanager, losses
+from utils import losses
 import shap
 from deeplift.dinuc_shuffle import dinuc_shuffle
 tf.compat.v1.disable_v2_behavior()

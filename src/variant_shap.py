@@ -11,7 +11,7 @@ import h5py
 import math
 from generators.variant_generator import VariantGenerator
 from generators.peak_generator import PeakGenerator
-from utils import argmanager, losses
+from utils import losses
 from utils.helpers import *
 import shap
 import logging

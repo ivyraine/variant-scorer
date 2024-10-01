@@ -9,7 +9,6 @@ from matplotlib import pyplot as plt
 import h5py
 import hdf5plugin
 
-from utils.argmanager import *
 from utils.helpers import *
 
 def print_h5_structure(file_name):
