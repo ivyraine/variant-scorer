@@ -14,7 +14,7 @@ def main(args = None, filter_dir_override = None):
         print("running variant scoring only for forward sequences")
 
     # load the model and variants
-    model = load_model_wrapper(args.model_path)
+    model = load_model_wrapper(args.model_path, is_compiling=args.model_architecture == 'bpnet')
     variants_table = load_variant_table(args.variant_list, args.schema)
     variants_table = variants_table.fillna('-')
     
@@ -22,10 +22,6 @@ def main(args = None, filter_dir_override = None):
     chrom_sizes_dict = chrom_sizes.set_index('chrom')['size'].to_dict()
 
     print("Original variants table shape:", variants_table.shape)
-
-    if args.chrom:
-        variants_table = variants_table.loc[variants_table['chr'] == args.chrom]
-        print("Chromosome variants table shape:", variants_table.shape)
 
     # infer input length
     if args.model_architecture == "chrombpnet":

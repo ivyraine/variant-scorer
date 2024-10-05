@@ -248,5 +248,5 @@ def cli():
 	args = get_args()
 	logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
 						format='%(asctime)s - %(levelname)s - %(message)s')
-	print(args)
+	# logging.basicConfig(format='%(message)s', level=logging.DEBUG if args.verbose else logging.INFO)
 	subcommand_args[args.subcommand]['function'](args)

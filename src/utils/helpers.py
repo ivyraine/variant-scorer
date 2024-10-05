@@ -76,11 +76,19 @@ def softmax(x, temp=1):
     norm_x = x - np.mean(x, axis=1, keepdims=True)
     return np.exp(temp*norm_x)/np.sum(np.exp(temp*norm_x), axis=1, keepdims=True)
 
-def load_model_wrapper(model_file):
+def load_model_wrapper(model_file, is_compiling=False):
     # read .h5 model
     custom_objects = {"multinomial_nll": losses.multinomial_nll, "tf": tf}
     get_custom_objects().update(custom_objects)
     model = load_model(model_file, compile=False)
+    # Compile model if it hasn't been compiled yet. This is a temp. fix for
+    # bug regarding BPNet models, where the model fails to predict due to
+    # the following: 
+    # `AttributeError: 'Functional' object has no attribute '_compile_metrics'
+    # The optimizer and loss function do not matter here, as we are only
+    # interested in the model's predictions.
+    if is_compiling:
+        model.compile(optimizer='adam', loss='categorical_crossentropy')
     logging.debug(f"Model {model_file} loaded successfully.")
     return model
 
