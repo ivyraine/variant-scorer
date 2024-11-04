@@ -22,7 +22,7 @@ def main(args = None):
     chromosome_suffixes = [f'chr{str(i)}.' for i in range(1, 24)] + ['chrX.', 'chrY.']
 
     # Check for file existence
-    missing_score_out_path_prefixes = []
+    missing_score_out_path_prefixes = set()
     for summarize_output_path, group in metadata.groupby(SUMMARIZE_OUT_PATH_COL):
         for file_index, score_out_path_prefix in enumerate(group[SCORE_OUT_PATH_PREFIX_COL]):
             is_split_per_chromosome = args.split_per_chromosome or (SPLIT_PER_CHROMOSOME_COL in group.columns and group[SPLIT_PER_CHROMOSOME_COL].iloc[file_index] == True)
@@ -30,19 +30,28 @@ def main(args = None):
                 has_at_least_one_chr_file = any(os.path.isfile(f"{score_out_path_prefix}{suffix}variant_scores.tsv") for suffix in chromosome_suffixes)
                 # Concatenate all the chromosome-specific variant scores
                 if not has_at_least_one_chr_file:
-                    missing_score_out_path_prefixes.append(score_out_path_prefix)
+                    missing_score_out_path_prefixes.add(score_out_path_prefix)
             else:
                 # If not split per chromosome, just read the original file
                 variant_score_file = f"{score_out_path_prefix}variant_scores.tsv"
                 if not os.path.isfile(variant_score_file):
-                    missing_score_out_path_prefixes.append(score_out_path_prefix)
+                    missing_score_out_path_prefixes.add(score_out_path_prefix)
     if missing_score_out_path_prefixes:
-        logging.error(f"Missing TSV files for the following prefixes (accounting for split-per-chromosome if provided):\n{missing_score_out_path_prefixes}")
-        exit(1)
+        missing_models_string = "\n".join(missing_score_out_path_prefixes)
+        if args.skip_missing_scores:
+            logging.warning(f'Missing the following {len(missing_score_out_path_prefixes)} TSV file(s) in the {SCORE_OUT_PATH_PREFIX_COL} column:\n{missing_models_string}\nSkipping these files as --skip-missing-scores is provided.')
+        else:
+            logging.error(f'Missing the following {len(missing_score_out_path_prefixes)} TSV file(s) in the {SCORE_OUT_PATH_PREFIX_COL} column:\n{missing_models_string}\nPlease add these file(s), or use the --skip-missing-scores flag, and try again.')
+            exit(1)
+
 
     # Iterate through each group of rows that share the same summarize_output_path
     for summarize_output_path, group in metadata.groupby(SUMMARIZE_OUT_PATH_COL):
-        for file_index, score_out_path_prefix in enumerate(group[SCORE_OUT_PATH_PREFIX_COL]):
+        score_out_path_prefixes = group[SCORE_OUT_PATH_PREFIX_COL]
+        if args.skip_missing_scores and score_out_path_prefixes.isin(missing_score_out_path_prefixes).any():
+            logging.debug(f'Skipping {summarize_output_path} as it has missing TSV files.')
+            continue
+        for file_index, score_out_path_prefix in enumerate(score_out_path_prefixes):
             is_split_per_chromosome = args.split_per_chromosome or (SPLIT_PER_CHROMOSOME_COL in group.columns and group[SPLIT_PER_CHROMOSOME_COL].iloc[file_index] == True)
             if is_split_per_chromosome:
                 # Concatenate TSV files based on the prefix and suffixes for chromosomes
