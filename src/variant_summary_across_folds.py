@@ -51,6 +51,9 @@ def main(args = None):
         if args.skip_missing_scores and score_out_path_prefixes.isin(missing_score_out_path_prefixes).any():
             logging.debug(f'Skipping {summarize_output_path} as it has missing TSV files.')
             continue
+        if args.skip_existing_outputs and os.path.isfile(summarize_output_path):
+            logging.debug(f'Skipping {summarize_output_path} as it already exists.')
+            continue
         for file_index, score_out_path_prefix in enumerate(score_out_path_prefixes):
             is_split_per_chromosome = args.split_per_chromosome or (SPLIT_PER_CHROMOSOME_COL in group.columns and group[SPLIT_PER_CHROMOSOME_COL].iloc[file_index] == True)
             if is_split_per_chromosome:

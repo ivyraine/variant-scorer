@@ -142,6 +142,7 @@ subcommand_args = {
 			("-sc", "--schema"): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
 			("-pc", "--split-per-chromosome"): {"action": "store_true", "help": "Merges all the variants split across chromosomes from the `score` subcommand for each fold, if provided. If using --input-metadata, you may instead create a 'split-per-chromosome' column with values True or False, for more fine-grained control."},
 			("-sm", "--skip-missing-scores"): { "action": "store_true", "help": "Skips summarizing missing score output files." },
+			("-se", "--skip-existing-outputs"): { "action": "store_true", "help": "Skips creating existing summarize output files." },
 			("-v", "--verbose"): { "action": "store_true", "help": "Enable detailed logging." },
 		},
 	},
