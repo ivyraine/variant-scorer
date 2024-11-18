@@ -34,7 +34,7 @@ def get_variant_schema(schema):
                   'plink': ['chr', 'variant_id', 'ignore1', 'pos', 'allele1', 'allele2'],
                   'plink2': ['chr', 'variant_id', 'pos', 'allele1', 'allele2'],
                   'bed': ['chr', 'pos', 'end', 'allele1', 'allele2', 'variant_id'],
-                  'chrombpnet': ['chr', 'pos', 'allele1', 'allele2', 'variant_id']}
+                  'chrombpnet': ['variant_id']}
     return var_SCHEMA[schema]
 
 def get_peak_schema(schema):
@@ -476,11 +476,11 @@ def add_missing_columns_to_peaks_df(peaks, schema):
 def get_score_dir(score_out_prefix):
     return os.path.dirname(score_out_prefix)
 
-def get_score_file_path(score_out_prefix, chr='all'):
+def get_score_file_path(score_out_prefix, file_suffix, chr='all'):
     if chr is None or chr == 'all':
-        return f"{score_out_prefix}variant_scores.tsv"
+        return f"{score_out_prefix}{file_suffix}"
     else:
-        return f"{score_out_prefix}{str(chr)}.variant_scores.tsv"
+        return f"{score_out_prefix}{str(chr)}{file_suffix}"
     
 def get_score_peaks_path(score_out_prefix):
     return f"{score_out_prefix}peak_scores.tsv"
@@ -848,3 +848,11 @@ def apply_multilevel_sort(df, sort_groups):
                     df.at[index, col] = delimiters[i].join(map(str, sorted_lists[i]))
 
     return df
+
+
+def setup_logging(logger, is_verbose, prefix=''):
+    logger.setLevel(logging.DEBUG if is_verbose else logging.INFO)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(f'{prefix}%(asctime)s - %(levelname)s - %(message)s'))
+    if not logger.hasHandlers():
+        logger.addHandler(handler)

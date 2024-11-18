@@ -223,7 +223,7 @@ def main(args = None, filter_dir_override = None):
     for chrom in todo_chroms:
 
         logging.info(f'Processing {chrom} variants')
-        output_tsv = get_score_file_path(args.score_output_path_prefix, chr=chrom)
+        output_tsv = get_score_file_path(args.score_output_path_prefix, args.scores_suffix, chr=chrom)
         if args.split_per_chromosome:
             curr_variants_table = variants_table.loc[variants_table['chr'] == chrom].sort_values(by='pos').copy()
             curr_variants_table.reset_index(drop=True, inplace=True)
