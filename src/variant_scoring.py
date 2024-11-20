@@ -236,7 +236,6 @@ def main(args = None, filter_dir_override = None):
         else:
             curr_variants_table = variants_table
 
-        # fetch model prediction for variants
         variant_ids, allele1_pred_counts, allele2_pred_counts, \
         allele1_pred_profiles, allele2_pred_profiles = fetch_variant_predictions(model,
                                                                             curr_variants_table,
@@ -324,10 +323,9 @@ def main(args = None, filter_dir_override = None):
 
         # store predictions at variants
         if hasattr(args, "no_hdf5") and not args.no_hdf5 or filter_dir_override is not None:
-            output_h5 = get_profiles_file_path(args.score_output_path_prefix, chrom)
+            output_h5 = get_profiles_file_path(args.score_output_path_prefix, args.predictions_suffix, chrom)
             with h5py.File(output_h5, 'w') as f:
                 observed = f.create_group('observed')
-                # Print shapes
                 observed.create_dataset('allele1_pred_counts', data=allele1_pred_counts, compression='gzip', compression_opts=9)
                 observed.create_dataset('allele2_pred_counts', data=allele2_pred_counts, compression='gzip', compression_opts=9)
                 observed.create_dataset('allele1_pred_profiles', data=allele1_pred_profiles, compression='gzip', compression_opts=9)
@@ -337,24 +335,6 @@ def main(args = None, filter_dir_override = None):
                 # variant_ids_decoded = [x.decode('utf-8') for x in variant_ids_encoded]
                 # print(variant_ids_decoded)
                 observed.create_dataset('variant_ids', data=variant_ids_encoded, compression='gzip', compression_opts=9)
-                # if len(shuf_variants_table) > 0:
-                #     shuffled = f.create_group('shuffled')
-                #     shuffled.create_dataset('shuf_allele1_pred_counts', data=shuf_allele1_pred_counts, compression='gzip', compression_opts=9)
-                #     shuffled.create_dataset('shuf_allele2_pred_counts', data=shuf_allele2_pred_counts, compression='gzip', compression_opts=9)
-                #     shuffled.create_dataset('shuf_logfc', data=shuf_logfc, compression='gzip', compression_opts=9)
-                #     shuffled.create_dataset('shuf_abs_logfc', data=shuf_abs_logfc, compression='gzip', compression_opts=9)
-                #     shuffled.create_dataset('shuf_jsd', data=shuf_jsd, compression='gzip', compression_opts=9)
-                #     shuffled.create_dataset('shuf_logfc_x_jsd', data=shuf_logfc_jsd, compression='gzip', compression_opts=9)
-                #     shuffled.create_dataset('shuf_abs_logfc_x_jsd', data=shuf_abs_logfc_jsd, compression='gzip', compression_opts=9)
-                #     if args.peaks:
-                #         shuffled.create_dataset('shuf_max_percentile', data=shuf_max_percentile, compression='gzip', compression_opts=9)
-                #         shuffled.create_dataset('shuf_percentile_change', data=shuf_percentile_change, compression='gzip', compression_opts=9)
-                #         shuffled.create_dataset('shuf_abs_percentile_change', data=shuf_abs_percentile_change, compression='gzip', compression_opts=9)
-                #         shuffled.create_dataset('shuf_logfc_x_max_percentile', data=shuf_logfc_max_percentile, compression='gzip', compression_opts=9)
-                #         shuffled.create_dataset('shuf_abs_logfc_max_percentile', data=shuf_abs_logfc_max_percentile, compression='gzip', compression_opts=9)
-                #         shuffled.create_dataset('shuf_jsd_max_percentile', data=shuf_jsd_max_percentile, compression='gzip', compression_opts=9)
-                #         shuffled.create_dataset('shuf_logfc_x_jsd_x_max_percentile', data=shuf_logfc_jsd_max_percentile, compression='gzip', compression_opts=9)
-                #         shuffled.create_dataset('shuf_abs_logfc_x_jsd_x_max_percentile', data=shuf_abs_logfc_jsd_max_percentile, compression='gzip', compression_opts=9)
             logging.info(f"Finished scoring {chrom}. Saved to {output_tsv} and {output_h5}")
         else:
             logging.info(f"Finished scoring {chrom}. Saved to {output_tsv}")

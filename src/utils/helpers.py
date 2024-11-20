@@ -34,7 +34,7 @@ def get_variant_schema(schema):
                   'plink': ['chr', 'variant_id', 'ignore1', 'pos', 'allele1', 'allele2'],
                   'plink2': ['chr', 'variant_id', 'pos', 'allele1', 'allele2'],
                   'bed': ['chr', 'pos', 'end', 'allele1', 'allele2', 'variant_id'],
-                  'chrombpnet': ['variant_id']}
+                  'chrombpnet': ['chr', 'pos', 'allele1', 'allele2', 'variant_id']}
     return var_SCHEMA[schema]
 
 def get_peak_schema(schema):
@@ -78,8 +78,11 @@ def softmax(x, temp=1):
 
 def load_model_wrapper(model_file, is_compiling=False):
     # read .h5 model
+    print("hi")
     custom_objects = {"multinomial_nll": losses.multinomial_nll, "tf": tf}
     get_custom_objects().update(custom_objects)
+    # model = load_model(model_file, compile=False)
+    print(model_file, is_compiling)
     model = load_model(model_file, compile=False)
     # Compile model if it hasn't been compiled yet. This is a temp. fix for
     # bug regarding BPNet models, where the model fails to predict due to
@@ -480,7 +483,7 @@ def get_score_file_path(score_out_prefix, file_suffix, chr='all'):
     if chr is None or chr == 'all':
         return f"{score_out_prefix}{file_suffix}"
     else:
-        return f"{score_out_prefix}{str(chr)}{file_suffix}"
+        return f"{score_out_prefix}.{str(chr)}.{file_suffix}"
     
 def get_score_peaks_path(score_out_prefix):
     return f"{score_out_prefix}peak_scores.tsv"
@@ -488,11 +491,11 @@ def get_score_peaks_path(score_out_prefix):
 def get_score_shuffled_path(score_out_prefix):
     return f"{score_out_prefix}variant_scores.shuffled.tsv"
 
-def get_profiles_file_path(score_out_prefix, chr='all'):
+def get_profiles_file_path(score_out_prefix, file_suffix, chr='all'):
     if chr is None or chr == 'all':
-        return f"{score_out_prefix}variant_predictions.tsv"
+        return f"{score_out_prefix}{file_suffix}"
     else:
-        return f"{score_out_prefix}{str(chr)}.variant_predictions.tsv"
+        return f"{score_out_prefix}.{str(chr)}.{file_suffix}"
 
 def get_annotate_output_file(annotate_dir, model_name):
     return f"{os.path.join(annotate_dir, model_name)}.annotations.tsv"

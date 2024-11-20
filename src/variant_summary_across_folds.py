@@ -42,9 +42,7 @@ def summarize(metadata_split, args, partition_index, process_index):
         
     if missing_scores:
         missing_files_str = "\n".join(missing_scores)
-        # incorrect_scores_str = "\n".join(incorrect_scores)
         logging.warning(f'The following {len(missing_scores)} TSV file(s) are missing:\n{missing_files_str}')
-        # logging.warning(f'The following {len(incorrect_scores)} TSV file(s) have incorrect line counts:\n{incorrect_scores_str}')
         if args.invalid_file_log:
             with open(args.invalid_file_log, 'w') as f:
                 f.write(f'{missing_files_str}\n')
@@ -65,6 +63,13 @@ def summarize(metadata_split, args, partition_index, process_index):
         summarize_output_path = _summarize_output_path[0]
         score_dict = []
         score_out_path_prefixes = group[SCORE_OUT_PATH_PREFIX_COL]
+        if args.expected_folds and len(score_out_path_prefixes) != args.expected_folds:
+            if not args.skip_invalid_scores:
+                logging.error(f"Skipping {summarize_output_path} due to incorrect number of folds.")
+                exit(1)
+            else:
+                logging.warning(f"Skipping {summarize_output_path} due to incorrect number of folds.")
+                continue
         read_time = 0.0
         processing_time = 0.0
         prefix_paths_str = '\n'.join(score_out_path_prefixes)
@@ -105,7 +110,14 @@ def summarize(metadata_split, args, partition_index, process_index):
                 variant_score_file = get_score_file_path(score_out_path_prefix, args.scores_suffix, chr='all')
 
                 read_start_time = time.time()
-                cur_scores = pl.read_csv(variant_score_file, separator='\t')
+                logging.debug(f"Reading {variant_score_file}")
+                try:
+                    cur_scores = pl.read_csv(variant_score_file, separator='\t')
+                except pl.exceptions.ComputeError as e:
+                    logging.error(f"Error reading {variant_score_file} with error: {e}")
+                    incorrect_scores.add(variant_score_file)
+                    is_skipping = True
+                    continue
                 if args.expected_line_count and cur_scores.height+1 != args.expected_line_count:
                     logging.warning(f"Skipping {summarize_output_path} due to invalid data.")
                     incorrect_scores.add(variant_score_file)
@@ -176,12 +188,7 @@ def main(args = None):
         rows_per_split = len(metadata) // n
         for i in range(n):
             start = i * rows_per_split
-            end = start + rows_per_split
-            # Adjust the last split to include any remaining rows
-            if i == n - 1:
-                partitions.append(metadata.slice(start, len(metadata) - start).clone())
-            else:
-                partitions.append(metadata.slice(start, end).clone())
+            partitions.append(metadata.slice(start, rows_per_split).clone())
         return partitions
 
     # For assigning a partition based on user-provided flag
@@ -189,7 +196,6 @@ def main(args = None):
 
     n_processes = min(args.multiprocessing_count, cpu_count())  # Replace with the number of desired splits
     metadata_splits = get_n_metadata_partitions(partition, n_processes)
-
 
     # Create a pool of processes, using the number of available CPUs
     multiprocessing_args = [(split, args, args.cur_partition, process_index) for process_index, split in enumerate(metadata_splits)]
