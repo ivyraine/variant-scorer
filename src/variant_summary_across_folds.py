@@ -8,7 +8,7 @@ from utils.helpers import *
 import logging
 import time
 from subprocess import check_output
-from multiprocessing import Pool, cpu_count, get_context
+from multiprocessing import cpu_count, get_context
 
 def summarize(metadata_split, args, partition_index, process_index):
 
@@ -32,30 +32,28 @@ def summarize(metadata_split, args, partition_index, process_index):
                 missing_scores.add(scores_file)
                 logging.debug(f'Missing scores file: {scores_file}')
                 skippable_summaries.add(summarize_out)
-            # if args.expected_line_count and args.expected_line_count != int(check_output(["wc", "-l", scores_file]).split()[0]):
+            # if args.expected_row_count and args.expected_row_count != int(check_output(["wc", "-l", scores_file]).split()[0]):
             #     incorrect_scores.add(scores_file)
             #     skippable_summaries.add(summarize_out)
             # TODO: check chr files
     
-    if os.path.isfile(args.invalid_file_log):
+    if args.invalid_file_log and  os.path.isfile(args.invalid_file_log):
         os.remove(args.invalid_file_log)
         
     if missing_scores:
         missing_files_str = "\n".join(missing_scores)
-        logging.warning(f'The following {len(missing_scores)} TSV file(s) are missing:\n{missing_files_str}')
+        logging.warning(f'The following {len(missing_scores)} TSV file(s) are missing:\n{missing_files_str}.')
         if args.invalid_file_log:
             with open(args.invalid_file_log, 'w') as f:
                 f.write(f'{missing_files_str}\n')
                 # f.write(f'{incorrect_scores_str}\n')
         if not args.skip_invalid_scores:
-            logging.error('Please fix the missing or incorrect files and try again, or use the --skip-invalid-scores flag.')
-            exit(1)
+            raise FileNotFoundError(f'The following {len(missing_scores)} TSV file(s) are missing:\n{missing_files_str}. Please fix the missing or incorrect files and try again, or use the --skip-invalid-scores flag.')
 
     incorrect_scores = set()
-
     
     summary_count = metadata_split.group_by(SUMMARIZE_OUT_PATH_COL).all().height
-    print(f"Processing {summary_count} summaries.")
+    # print(f"Processing {summary_count} summaries.")
 
     for index, group_pair in enumerate(metadata_split.group_by(SUMMARIZE_OUT_PATH_COL)):
         is_skipping = False
@@ -65,8 +63,7 @@ def summarize(metadata_split, args, partition_index, process_index):
         score_out_path_prefixes = group[SCORE_OUT_PATH_PREFIX_COL]
         if args.expected_folds and len(score_out_path_prefixes) != args.expected_folds:
             if not args.skip_invalid_scores:
-                logging.error(f"Skipping {summarize_output_path} due to incorrect number of folds.")
-                exit(1)
+                raise ValueError(f"Skipping {summarize_output_path} due to incorrect number of folds.")
             else:
                 logging.warning(f"Skipping {summarize_output_path} due to incorrect number of folds.")
                 continue
@@ -102,7 +99,6 @@ def summarize(metadata_split, args, partition_index, process_index):
                 if partial_scores:
                     cur_scores = pl.concat(partial_scores, ignore_index=True)
                 else:
-                    logging.error(f"No TSV files found for prefix {score_out_path_prefix} with the specified suffixes.")
                     raise FileNotFoundError(f"No TSV files found for prefix {score_out_path_prefix} with the specified suffixes.")
             else:
                 # If not split per chromosome, just read the original file
@@ -118,7 +114,7 @@ def summarize(metadata_split, args, partition_index, process_index):
                     incorrect_scores.add(variant_score_file)
                     is_skipping = True
                     continue
-                if args.expected_line_count and cur_scores.height+1 != args.expected_line_count:
+                if args.expected_row_count and cur_scores.height != args.expected_row_count:
                     logging.warning(f"Skipping {summarize_output_path} due to invalid data.")
                     incorrect_scores.add(variant_score_file)
                     is_skipping = True
@@ -173,8 +169,7 @@ def main(args = None):
         # Check for MODEL_ID_COL-SCORE duplicates
         duplicates = metadata.filter(metadata.select(SUMMARIZE_OUT_PATH_COL, SCORE_OUT_PATH_PREFIX_COL).is_duplicated())
         if not duplicates.is_empty():
-            logging.error(f"Duplicate entries found for {SUMMARIZE_OUT_PATH_COL} and {SCORE_OUT_PATH_PREFIX_COL} combination:\n{duplicates}\nRemove the duplicates and try again.")
-            exit(1)
+            raise ValueError(f"Duplicate entries found for {SUMMARIZE_OUT_PATH_COL} and {SCORE_OUT_PATH_PREFIX_COL} combination:\n{duplicates}\nRemove the duplicates and try again.")
     elif args.score_output_path_prefixes and args.summarize_output_path:
         # Create a DataFrame with the score_output_path_prefixes
         metadata = pl.DataFrame({
@@ -184,11 +179,10 @@ def main(args = None):
         })
     
     def get_n_metadata_partitions(metadata, n):
-        partitions = []
-        rows_per_split = len(metadata) // n
-        for i in range(n):
-            start = i * rows_per_split
-            partitions.append(metadata.slice(start, rows_per_split).clone())
+        partitions = [pl.DataFrame() for _ in range(n)]
+        for index, group_pair in enumerate(metadata.group_by(SUMMARIZE_OUT_PATH_COL)):
+            partition_index = index % n
+            partitions[partition_index].vstack(group_pair[1], in_place=True)
         return partitions
 
     # For assigning a partition based on user-provided flag

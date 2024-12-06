@@ -4,9 +4,38 @@ import numpy as np
 import h5py
 from utils.helpers import *
 import logging
+import threading
+import queue
+import time
+import psutil
 
-def main(args = None, filter_dir_override = None):
+def print_memory_usage():
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    memory_in_mb = memory_info.rss / (1024 * 1024)  # Convert bytes to MB
+    print(f"Current memory usage: {memory_in_mb:.2f} MB")
 
+def consume_scores(args, data_queue, stop_event):
+    output_path = get_score_file_path(args.score_output_path_prefix, args.scores_suffix, chr='all')
+    with open(output_path, "w") as f:
+        batch = []
+        while not stop_event.is_set():
+            try:
+                data = data_queue.get(timeout=0.5)  # Wait for data
+                if data is None:  # End signal
+                    if batch:  # Write any remaining data
+                        f.write("\n".join(batch) + "\n")
+                    break
+                batch.append(data)
+                if len(batch) >= 1:
+                    f.write("\n".join(batch) + "\n")
+                    batch = []  # Clear batch after writing
+            except queue.Empty:
+                continue  # Retry waiting for data
+
+
+def produce_scores(args, data_queue, stop_event, filter_dir_override = None):
+    print(args)
     variants_table = None
 
     np.random.seed(args.random_seed)
@@ -220,106 +249,126 @@ def main(args = None, filter_dir_override = None):
 
     todo_chroms = [x for x in variants_table.chr.unique()] if args.split_per_chromosome else ['all']
 
+    total_allele1_counts = np.array([])
+    total_allele2_counts = np.array([])
+    total_allele1_preds = np.array([])
+    total_allele2_preds = np.array([])
     for chrom in todo_chroms:
 
         logging.info(f'Processing {chrom} variants')
-        output_tsv = get_score_file_path(args.score_output_path_prefix, args.scores_suffix, chr=chrom)
-        if args.split_per_chromosome:
-            curr_variants_table = variants_table.loc[variants_table['chr'] == chrom].sort_values(by='pos').copy()
-            curr_variants_table.reset_index(drop=True, inplace=True)
+        # output_tsv = get_score_file_path(args.score_output_path_prefix, args.scores_suffix, chr=chrom)
+        # if args.split_per_chromosome:
+        #     chr_variants_table = variants_table.loc[variants_table['chr'] == chrom].sort_values(by='pos').copy()
+        #     chr_variants_table.reset_index(drop=True, inplace=True)
 
-            if os.path.isfile(output_tsv):
-                curr_variants_table_loaded = pd.read_table(output_tsv)
-                if curr_variants_table_loaded['variant_id'].tolist() == curr_variants_table['variant_id'].tolist():
-                    logging.info(f"Skipping {chrom} as the {output_tsv} already exists")
-                    continue
-        else:
-            curr_variants_table = variants_table
+        #     if os.path.isfile(output_tsv):
+        #         chr_variants_table_loaded = pd.read_table(output_tsv)
+        #         if chr_variants_table_loaded['variant_id'].tolist() == chr_variants_table['variant_id'].tolist():
+        #             logging.info(f"Skipping {chrom} as the {output_tsv} already exists")
+        #             continue
+        # else:
+        #     chr_variants_table = variants_table
 
-        variant_ids, allele1_pred_counts, allele2_pred_counts, \
-        allele1_pred_profiles, allele2_pred_profiles = fetch_variant_predictions(model,
-                                                                            curr_variants_table,
-                                                                            input_len,
-                                                                            args.genome,
-                                                                            args.batch_size,
-                                                                            model_architecture=args.model_architecture,
-                                                                            debug_mode=args.debug_mode,
-                                                                            shuf=False,
-                                                                            forward_only=args.forward_only)
+        chr_variants_table = variants_table
 
-        if args.peaks:
-            logfc, jsd, \
-            allele1_quantile, allele2_quantile = get_variant_scores_with_peaks(allele1_pred_counts,
-                                                                                    allele2_pred_counts,
-                                                                                    allele1_pred_profiles,
-                                                                                    allele2_pred_profiles,
-                                                                                    np.array(peaks["peak_score"].tolist()))
-        else:
-            logfc, jsd = get_variant_scores(allele1_pred_counts,
-                                            allele2_pred_counts,
-                                            allele1_pred_profiles,
-                                            allele2_pred_profiles)
+        # TODO: Since the user cares about memory use- given the user's desired memory max, calculate the amount of memory needed for each row, and calculate how many rows can be processed at once within that memory.
+        variants_batch_size = 4096
+        group_ids = np.arange(len(chr_variants_table)) // variants_batch_size
+        curr_variants_table_groups = chr_variants_table.groupby(group_ids)
+        for curr_variants_table_group in curr_variants_table_groups:
+            table_index, curr_variants_table = curr_variants_table_group
+            # Split into batches.
+            variant_ids, allele1_pred_counts, allele2_pred_counts, \
+            allele1_pred_profiles, allele2_pred_profiles = fetch_variant_predictions(model,
+                                                                                curr_variants_table,
+                                                                                input_len,
+                                                                                args.genome,
+                                                                                args.batch_size,
+                                                                                model_architecture=args.model_architecture,
+                                                                                debug_mode=args.debug_mode,
+                                                                                shuf=False,
+                                                                                forward_only=args.forward_only)
 
-        indel_idx, adjusted_jsd_list = adjust_indel_jsd(curr_variants_table,allele1_pred_profiles,allele2_pred_profiles,jsd)
-        has_indel_variants = (len(indel_idx) > 0)
+            if args.peaks:
+                logfc, jsd, \
+                allele1_quantile, allele2_quantile = get_variant_scores_with_peaks(allele1_pred_counts,
+                                                                                        allele2_pred_counts,
+                                                                                        allele1_pred_profiles,
+                                                                                        allele2_pred_profiles,
+                                                                                        np.array(peaks["peak_score"].tolist()))
+            else:
+                logfc, jsd = get_variant_scores(allele1_pred_counts,
+                                                allele2_pred_counts,
+                                                allele1_pred_profiles,
+                                                allele2_pred_profiles)
 
-        assert np.array_equal(curr_variants_table["variant_id"].tolist(), variant_ids)
-        curr_variants_table["allele1_pred_counts"] = allele1_pred_counts
-        curr_variants_table["allele2_pred_counts"] = allele2_pred_counts
-        curr_variants_table["logfc"] = logfc
-        curr_variants_table["abs_logfc"] = np.abs(curr_variants_table["logfc"])
-        if has_indel_variants:
-            curr_variants_table["jsd"] = adjusted_jsd_list
-        else:
-            curr_variants_table["jsd"] = jsd
-            assert np.array_equal(adjusted_jsd_list, jsd)
-        curr_variants_table["original_jsd"] = jsd
-        curr_variants_table["logfc_x_jsd"] = curr_variants_table["logfc"] * curr_variants_table["jsd"]
-        curr_variants_table["abs_logfc_x_jsd"] = curr_variants_table["abs_logfc"] * curr_variants_table["jsd"]
+            indel_idx, adjusted_jsd_list = adjust_indel_jsd(curr_variants_table,allele1_pred_profiles,allele2_pred_profiles,jsd)
+            has_indel_variants = (len(indel_idx) > 0)
 
-        if len(shuf_variants_table) > 0:
-            curr_variants_table["logfc.pval"] = get_pvals(curr_variants_table["logfc"].tolist(), shuf_variants_table["logfc"], tail="both")
-            curr_variants_table["abs_logfc.pval"] = get_pvals(curr_variants_table["abs_logfc"].tolist(), shuf_variants_table["abs_logfc"], tail="right")
-            curr_variants_table["jsd.pval"] = get_pvals(curr_variants_table["jsd"].tolist(), shuf_variants_table["jsd"], tail="right")
-            curr_variants_table["logfc_x_jsd.pval"] = get_pvals(curr_variants_table["logfc_x_jsd"].tolist(), shuf_variants_table["logfc_x_jsd"], tail="both")
-            curr_variants_table["abs_logfc_x_jsd.pval"] = get_pvals(curr_variants_table["abs_logfc_x_jsd"].tolist(), shuf_variants_table["abs_logfc_x_jsd"], tail="right")
-        if args.peaks:
-            curr_variants_table["allele1_quantile"] = allele1_quantile
-            curr_variants_table["allele2_quantile"] = allele2_quantile
-            curr_variants_table["active_allele_quantile"] = curr_variants_table[["allele1_quantile", "allele2_quantile"]].max(axis=1)
-            curr_variants_table["quantile_change"] = curr_variants_table["allele2_quantile"] - curr_variants_table["allele1_quantile"]
-            curr_variants_table["abs_quantile_change"] = np.abs(curr_variants_table["quantile_change"])
-            curr_variants_table["logfc_x_active_allele_quantile"] = curr_variants_table["logfc"] * curr_variants_table["active_allele_quantile"]
-            curr_variants_table["abs_logfc_x_active_allele_quantile"] = curr_variants_table["abs_logfc"] * curr_variants_table["active_allele_quantile"]
-            curr_variants_table["jsd_x_active_allele_quantile"] = curr_variants_table["jsd"] * curr_variants_table["active_allele_quantile"]
-            curr_variants_table["logfc_x_jsd_x_active_allele_quantile"] = curr_variants_table["logfc_x_jsd"] * curr_variants_table["active_allele_quantile"]
-            curr_variants_table["abs_logfc_x_jsd_x_active_allele_quantile"] = curr_variants_table["abs_logfc_x_jsd"] * curr_variants_table["active_allele_quantile"]
+            assert np.array_equal(curr_variants_table["variant_id"].tolist(), variant_ids)
+            curr_variants_table["allele1_pred_counts"] = allele1_pred_counts
+            curr_variants_table["allele2_pred_counts"] = allele2_pred_counts
+            curr_variants_table["logfc"] = logfc
+            curr_variants_table["abs_logfc"] = np.abs(curr_variants_table["logfc"])
+            if has_indel_variants:
+                curr_variants_table["jsd"] = adjusted_jsd_list
+            else:
+                curr_variants_table["jsd"] = jsd
+                assert np.array_equal(adjusted_jsd_list, jsd)
+            curr_variants_table["original_jsd"] = jsd
+            curr_variants_table["logfc_x_jsd"] = curr_variants_table["logfc"] * curr_variants_table["jsd"]
+            curr_variants_table["abs_logfc_x_jsd"] = curr_variants_table["abs_logfc"] * curr_variants_table["jsd"]
 
             if len(shuf_variants_table) > 0:
-                curr_variants_table["active_allele_quantile.pval"] = get_pvals(curr_variants_table["active_allele_quantile"].tolist(),
-                                                                    shuf_variants_table["active_allele_quantile"], tail="right")
-                curr_variants_table['quantile_change.pval'] = get_pvals(curr_variants_table["quantile_change"].tolist(),
-                                                                        shuf_variants_table["quantile_change"], tail="both")
-                curr_variants_table["abs_quantile_change.pval"] = get_pvals(curr_variants_table["abs_quantile_change"].tolist(),
-                                                                            shuf_variants_table["abs_quantile_change"], tail="right")
-                curr_variants_table["logfc_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["logfc_x_active_allele_quantile"].tolist(),
-                                                                            shuf_variants_table["logfc_x_active_allele_quantile"], tail="both")
-                curr_variants_table["abs_logfc_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["abs_logfc_x_active_allele_quantile"].tolist(),
-                                                                                shuf_variants_table["abs_logfc_x_active_allele_quantile"], tail="right")
-                curr_variants_table["jsd_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["jsd_x_active_allele_quantile"].tolist(),
-                                                                        shuf_variants_table["jsd_x_active_allele_quantile"], tail="right")
-                curr_variants_table["logfc_x_jsd_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["logfc_x_jsd_x_active_allele_quantile"].tolist(),
-                                                                                shuf_variants_table["logfc_x_jsd_x_active_allele_quantile"], tail="both")
-                curr_variants_table["abs_logfc_x_jsd_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["abs_logfc_x_jsd_x_active_allele_quantile"].tolist(),
-                                                                                    shuf_variants_table["abs_logfc_x_jsd_x_active_allele_quantile"], tail="right")
+                curr_variants_table["logfc.pval"] = get_pvals(curr_variants_table["logfc"].tolist(), shuf_variants_table["logfc"], tail="both")
+                curr_variants_table["abs_logfc.pval"] = get_pvals(curr_variants_table["abs_logfc"].tolist(), shuf_variants_table["abs_logfc"], tail="right")
+                curr_variants_table["jsd.pval"] = get_pvals(curr_variants_table["jsd"].tolist(), shuf_variants_table["jsd"], tail="right")
+                curr_variants_table["logfc_x_jsd.pval"] = get_pvals(curr_variants_table["logfc_x_jsd"].tolist(), shuf_variants_table["logfc_x_jsd"], tail="both")
+                curr_variants_table["abs_logfc_x_jsd.pval"] = get_pvals(curr_variants_table["abs_logfc_x_jsd"].tolist(), shuf_variants_table["abs_logfc_x_jsd"], tail="right")
+            if args.peaks:
+                curr_variants_table["allele1_quantile"] = allele1_quantile
+                curr_variants_table["allele2_quantile"] = allele2_quantile
+                curr_variants_table["active_allele_quantile"] = curr_variants_table[["allele1_quantile", "allele2_quantile"]].max(axis=1)
+                curr_variants_table["quantile_change"] = curr_variants_table["allele2_quantile"] - curr_variants_table["allele1_quantile"]
+                curr_variants_table["abs_quantile_change"] = np.abs(curr_variants_table["quantile_change"])
+                curr_variants_table["logfc_x_active_allele_quantile"] = curr_variants_table["logfc"] * curr_variants_table["active_allele_quantile"]
+                curr_variants_table["abs_logfc_x_active_allele_quantile"] = curr_variants_table["abs_logfc"] * curr_variants_table["active_allele_quantile"]
+                curr_variants_table["jsd_x_active_allele_quantile"] = curr_variants_table["jsd"] * curr_variants_table["active_allele_quantile"]
+                curr_variants_table["logfc_x_jsd_x_active_allele_quantile"] = curr_variants_table["logfc_x_jsd"] * curr_variants_table["active_allele_quantile"]
+                curr_variants_table["abs_logfc_x_jsd_x_active_allele_quantile"] = curr_variants_table["abs_logfc_x_jsd"] * curr_variants_table["active_allele_quantile"]
 
-        if args.schema == "bed":
-            curr_variants_table['pos'] = curr_variants_table['pos'] - 1
+                if len(shuf_variants_table) > 0:
+                    curr_variants_table["active_allele_quantile.pval"] = get_pvals(curr_variants_table["active_allele_quantile"].tolist(),
+                                                                        shuf_variants_table["active_allele_quantile"], tail="right")
+                    curr_variants_table['quantile_change.pval'] = get_pvals(curr_variants_table["quantile_change"].tolist(),
+                                                                            shuf_variants_table["quantile_change"], tail="both")
+                    curr_variants_table["abs_quantile_change.pval"] = get_pvals(curr_variants_table["abs_quantile_change"].tolist(),
+                                                                                shuf_variants_table["abs_quantile_change"], tail="right")
+                    curr_variants_table["logfc_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["logfc_x_active_allele_quantile"].tolist(),
+                                                                                shuf_variants_table["logfc_x_active_allele_quantile"], tail="both")
+                    curr_variants_table["abs_logfc_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["abs_logfc_x_active_allele_quantile"].tolist(),
+                                                                                    shuf_variants_table["abs_logfc_x_active_allele_quantile"], tail="right")
+                    curr_variants_table["jsd_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["jsd_x_active_allele_quantile"].tolist(),
+                                                                            shuf_variants_table["jsd_x_active_allele_quantile"], tail="right")
+                    curr_variants_table["logfc_x_jsd_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["logfc_x_jsd_x_active_allele_quantile"].tolist(),
+                                                                                    shuf_variants_table["logfc_x_jsd_x_active_allele_quantile"], tail="both")
+                    curr_variants_table["abs_logfc_x_jsd_x_active_allele_quantile.pval"] = get_pvals(curr_variants_table["abs_logfc_x_jsd_x_active_allele_quantile"].tolist(),
+                                                                                        shuf_variants_table["abs_logfc_x_jsd_x_active_allele_quantile"], tail="right")
 
-        logging.info(f"Output score table:\n{curr_variants_table.head()}\n{curr_variants_table.shape}")
+            if args.schema == "bed":
+                curr_variants_table['pos'] = curr_variants_table['pos'] - 1
 
-        print(f"writing to {output_tsv}")
-        curr_variants_table.to_csv(output_tsv, sep="\t", index=False)
+            # logging.info(f"Output score table:\n{curr_variants_table.head()}\n{curr_variants_table.shape}")
+
+            # print(f"writing to {output_tsv}")
+            # curr_variants_table.to_csv(output_tsv, sep="\t", index=False)
+            data_queue.put(curr_variants_table)
+
+            if hasattr(args, "no_hdf5") and not args.no_hdf5 or filter_dir_override is not None:
+                total_allele1_counts = np.append(total_allele1_counts, allele1_pred_counts)
+                total_allele2_counts = np.append(total_allele2_counts, allele2_pred_counts)
+                total_allele1_preds = np.append(total_allele1_preds, allele1_pred_profiles)
+                total_allele2_preds = np.append(total_allele2_preds, allele2_pred_profiles)
 
         # store predictions at variants
         if hasattr(args, "no_hdf5") and not args.no_hdf5 or filter_dir_override is not None:
@@ -335,10 +384,27 @@ def main(args = None, filter_dir_override = None):
                 # variant_ids_decoded = [x.decode('utf-8') for x in variant_ids_encoded]
                 # print(variant_ids_decoded)
                 observed.create_dataset('variant_ids', data=variant_ids_encoded, compression='gzip', compression_opts=9)
-            logging.info(f"Finished scoring {chrom}. Saved to {output_tsv} and {output_h5}")
-        else:
-            logging.info(f"Finished scoring {chrom}. Saved to {output_tsv}")
+            logging.info(f"Saved to {output_h5}")
 
+    data_queue.put(curr_variants_table.to_csv(header=True if table_index == 0 else False, sep='\t', index=False))  # Signal end of data
+    print_memory_usage()
 
-if __name__ == "__main__":
-    main()
+def main(args, filter_dir_override = None):
+    # Shared resources
+    data_queue = queue.Queue(maxsize=20)  # Max size for flow control
+    stop_event = threading.Event()
+
+    producer_thread = threading.Thread(target=produce_scores, args=(args, data_queue, stop_event))
+    consumer_thread = threading.Thread(target=consume_scores, args=(args, data_queue, stop_event))
+
+    # Start threads
+    producer_thread.start()
+    consumer_thread.start()
+
+    # Let the producer work for some time (e.g., 5 seconds)
+    time.sleep(5)
+    stop_event.set()  # Signal threads to stop
+
+    # Wait for threads to finish
+    producer_thread.join()
+    consumer_thread.join()
