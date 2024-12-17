@@ -14,9 +14,14 @@ def annotate(metadata_split, args, partition_index, process_index, input_col, ou
 
     logging.debug(f"Beginning process.")
 
+    if metadata_split.is_empty():
+        logging.warning(f"Empty metadata split. Exiting.")
+        return
+
     if args.invalid_file_log and  os.path.isfile(args.invalid_file_log):
         os.remove(args.invalid_file_log)
 
+    # Check for missing input files
     missing_input_files = set()
     for row in metadata_split.iter_rows(named=True):
         if not os.path.isfile(row[input_col]):
@@ -24,16 +29,23 @@ def annotate(metadata_split, args, partition_index, process_index, input_col, ou
     
     if missing_input_files:
         missing_files_str = "\n".join(missing_input_files)
-        logging.warning(f'The following {len(missing_input_files)} TSV file(s) are missing:\n{missing_files_str}')
         if args.invalid_file_log:
             with open(args.invalid_file_log, 'w') as f:
                 f.write(f'{missing_files_str}\n')
-        if not args.skip_invalid_inputs:
+        if args.skip_invalid_inputs:
+            logging.warning(f'The following {len(missing_input_files)} TSV file(s) are missing:\n{missing_files_str}')
+        else:
+            print(args.skip_invalid_inputs)
             raise FileNotFoundError(f'The following {len(missing_input_files)} TSV file(s) are missing:\n{missing_files_str}. Please fix the missing or incorrect files and try again, or use the --skip-invalid-inputs flag.')
+    
+    logging.info(f"Processing {metadata_split.height} files.")
 
-    for row in metadata_split.iter_rows(named=True):
+    for index, row in enumerate(metadata_split.iter_rows(named=True)):
+
+        logging.info(f"Processing {row[input_col]} ({index+1}/{len(metadata_split)})")
 
         if row[input_col] in missing_input_files:
+            logging.warning(f"Skipping missing file: {row[input_col]}")
             continue
 
         variant_scores = pl.read_csv(row[input_col], separator='\t')
@@ -89,7 +101,7 @@ def annotate(metadata_split, args, partition_index, process_index, input_col, ou
             # Get the peaks file path from the metadata_split file if provided.
             peaks_file = row[PEAKS_PATH_COL] if args.peaks is True else args.peaks
 
-            peak_df = pl.read_csv(peaks_file, has_header=False, separator='\t')
+            peak_df = pl.read_csv(peaks_file, has_header=False, separator='\t', null_values=['.'])
             variant_bed = pybedtools.BedTool.from_dataframe(variant_scores_bed_format.to_pandas())
             peak_bed = pybedtools.BedTool.from_dataframe(
                     peak_df.to_pandas()
@@ -185,7 +197,7 @@ def main(args = None):
         raise ValueError(f"Invalid subcommand {args.subcommand}")
 
     # Drop duplicates based on input_col and output_col, keeping other columns intact
-    metadata = metadata.unique(subset=[input_col, output_col])
+    metadata = metadata.unique(subset=[input_col, output_col], maintain_order=True)
     
     # Check if there's duplicates in the output_col
     duplicates = metadata.filter(metadata[output_col].is_duplicated())
@@ -193,17 +205,16 @@ def main(args = None):
         raise ValueError(f"The following rows have duplicate output cols ({output_col}):\n{duplicates}\nPlease remove them and try again.")
 
     def get_n_metadata_partitions_evenly(metadata, n):
-        partitions = []
         partitions = [pl.DataFrame() for _ in range(n)]
-        for index, group_pair in enumerate(metadata.group_by(input_col)):
+
+        if input_col not in metadata.columns:
+            logging.warning(f"Column {input_col} not found in metadata, possibly from having more partitions than assignable tasks.")
+            return partitions
+
+        for index, group_pair in enumerate(metadata.group_by(input_col, maintain_order=True)):
             partition_index = index % n
+            print(f'{group_pair[1]} {partition_index}')
             partitions[partition_index].vstack(group_pair[1], in_place=True)
-        # rows_per_split = ceil(len(metadata) / n)
-        # for i in range(n):
-        #     start = i * rows_per_split
-        #     length = rows_per_split
-        #     print(f"Partition {i}: {start} to {start + length-1 }")
-        #     partitions.append(metadata.slice(start, length).clone())
         return partitions
 
     # def get_n_metadata_partitions(metadata, n, input_col):
@@ -214,13 +225,13 @@ def main(args = None):
     #     return partitions
 
     # For assigning a partition based on user-provided flag
-    partition = get_n_metadata_partitions_evenly(metadata, args.max_partitions)[args.cur_partition]
+    partition = get_n_metadata_partitions_evenly(metadata, args.partition[0])[args.partition[1]]
 
     n_processes = min(args.multiprocessing_count, cpu_count())  # Replace with the number of desired splits
     metadata_splits = get_n_metadata_partitions_evenly(partition, n_processes)
 
     # Create a pool of processes, using the number of available CPUs
-    multiprocessing_args = [(split, args, args.cur_partition, process_index, input_col, output_col) for process_index, split in enumerate(metadata_splits)]
+    multiprocessing_args = [(split, args, args.partition[1], process_index, input_col, output_col) for process_index, split in enumerate(metadata_splits)]
     # with Pool(processes=n_processes) as pool:
     with get_context("spawn").Pool(processes=n_processes) as pool:
         # Map the function to each DataFrame in parallel

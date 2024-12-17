@@ -746,14 +746,15 @@ def add_aggregate_annots_using_pandas(agg_annots: pd.DataFrame, cur_annots: pd.D
     return agg_annots
 
 
-def add_aggregate_annots_using_python(agg_annots: pd.DataFrame, cur_annots: pd.DataFrame, args):
+def add_aggregate_annots_using_python(args, agg_annots: pd.DataFrame, cur_annots: pd.DataFrame=None):
     for label, expression, default_value_expression in args:
         # If the label is not in the aggregate DataFrame, add it with the default value.
-        if label not in agg_annots.columns:
+        if cur_annots is None:
             # agg_annots[label] = default_value_expression
             agg_annots[label] = eval(default_value_expression, None, {'df': agg_annots})
-        # Expose the aggregate DataFrame as df, and the DataFrame to be added as cur_df, for the user.
-        agg_annots[label] = eval(expression, None, {'df': agg_annots, 'cur_df': cur_annots})
+        else:
+            # Expose the aggregate DataFrame as df, and the DataFrame to be added as cur_df, for the user.
+            agg_annots[label] = eval(expression, None, {'df': agg_annots, 'cur_df': cur_annots})
     return agg_annots
 
 

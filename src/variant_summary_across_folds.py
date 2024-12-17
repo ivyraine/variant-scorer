@@ -32,10 +32,6 @@ def summarize(metadata_split, args, partition_index, process_index):
                 missing_scores.add(scores_file)
                 logging.debug(f'Missing scores file: {scores_file}')
                 skippable_summaries.add(summarize_out)
-            # if args.expected_row_count and args.expected_row_count != int(check_output(["wc", "-l", scores_file]).split()[0]):
-            #     incorrect_scores.add(scores_file)
-            #     skippable_summaries.add(summarize_out)
-            # TODO: check chr files
     
     if args.invalid_file_log and  os.path.isfile(args.invalid_file_log):
         os.remove(args.invalid_file_log)
@@ -62,6 +58,9 @@ def summarize(metadata_split, args, partition_index, process_index):
         score_dict = []
         score_out_path_prefixes = group[SCORE_OUT_PATH_PREFIX_COL]
         if args.expected_folds and len(score_out_path_prefixes) != args.expected_folds:
+            if args.invalid_file_log:
+                with open(args.invalid_file_log, 'w') as f:
+                    f.write(f'{summarize_output_path}\n')
             if not args.skip_invalid_scores:
                 raise ValueError(f"Skipping {summarize_output_path} due to incorrect number of folds.")
             else:
@@ -180,19 +179,19 @@ def main(args = None):
     
     def get_n_metadata_partitions(metadata, n):
         partitions = [pl.DataFrame() for _ in range(n)]
-        for index, group_pair in enumerate(metadata.group_by(SUMMARIZE_OUT_PATH_COL)):
+        for index, group_pair in enumerate(metadata.group_by(SUMMARIZE_OUT_PATH_COL, maintain_order=True)):
             partition_index = index % n
             partitions[partition_index].vstack(group_pair[1], in_place=True)
         return partitions
 
     # For assigning a partition based on user-provided flag
-    partition = get_n_metadata_partitions(metadata, args.max_partitions)[args.cur_partition]
+    partition = get_n_metadata_partitions(metadata, args.partition[0])[args.partition[1]]
 
     n_processes = min(args.multiprocessing_count, cpu_count())  # Replace with the number of desired splits
     metadata_splits = get_n_metadata_partitions(partition, n_processes)
 
     # Create a pool of processes, using the number of available CPUs
-    multiprocessing_args = [(split, args, args.cur_partition, process_index) for process_index, split in enumerate(metadata_splits)]
+    multiprocessing_args = [(split, args, args.partition[1], process_index) for process_index, split in enumerate(metadata_splits)]
     # with Pool(processes=n_processes) as pool:
     with get_context("spawn").Pool(processes=n_processes) as pool:
         # Map the function to each DataFrame in parallel
