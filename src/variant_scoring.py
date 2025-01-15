@@ -16,7 +16,7 @@ def print_memory_usage():
     print(f"Current memory usage: {memory_in_mb:.2f} MB")
 
 def consume_scores(args, data_queue, stop_event):
-    output_path = get_score_file_path(args.score_output_path_prefix, args.scores_suffix, chr='all')
+    output_path = get_score_file_path(args.score_output_path_prefix, args.score_filename, chr='all')
     with open(output_path, "w") as f:
         batch = []
         while not stop_event.is_set():
@@ -256,7 +256,7 @@ def produce_scores(args, data_queue, stop_event, filter_dir_override = None):
     for chrom in todo_chroms:
 
         logging.info(f'Processing {chrom} variants')
-        # output_tsv = get_score_file_path(args.score_output_path_prefix, args.scores_suffix, chr=chrom)
+        # output_tsv = get_score_file_path(args.score_output_path_prefix, args.score_filename, chr=chrom)
         # if args.split_per_chromosome:
         #     chr_variants_table = variants_table.loc[variants_table['chr'] == chrom].sort_values(by='pos').copy()
         #     chr_variants_table.reset_index(drop=True, inplace=True)

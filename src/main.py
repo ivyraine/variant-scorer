@@ -131,7 +131,7 @@ subcommand_args = {
 			("-m", "--model-path"): {"type": str, "help": "The path of the model file to use for variant scoring, whose outputs will be labeled with numerical indexes beginning from 0 in the order they are provided.", "required": True},
 			("-ma", "--model-architecture"): {"type": str, "help": "The name of the model architecture to be used for predictions. Currently supports: ['bpnet', 'chrombpnet', 'chrombpnet-lite'].", "default": "chrombpnet"},
 			("-o", "--score-output-path-prefix"): {"type": str, "help": 'A string that will be prefixed to the outputs of the `score` subcommand, to form a valid path to be written to. Should contain information relevant to the project, subcommand, model, and fold, if relevant. Used in this way: "<output-path-prefix><output-file-suffix>". Example usage: `--score-output-path-prefix /projects/score/adipocytes/fold_0/` will output to paths like /projects/score/adipocytes/fold_0/variant_scores.tsv.', "required": True},
-			("-ss", "--scores-suffix"): {"type": str, "help": "The score file path suffix applied after the output prefix.", 'default': 'variant_scores.tsv'},
+			("-sf", "--score-filename"): {"type": str, "help": "The output score filename to use after the output prefix.", 'default': 'variant_scores.tsv'},
 			("-psf", "--predictions-suffix"): {"type": str, "help": "The model predictions file path suffix applied after the output prefix.", 'default': 'variant_predictions.tsv'},
 			("-s", "--chrom-sizes"): {"type": str, "help": "Path to TSV file with chromosome sizes", "required": True},
 			("-sc", "--schema"): {"type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},
@@ -160,7 +160,7 @@ subcommand_args = {
 		"function": variant_summary_across_folds.main,
 		"args": {
 			("-i", "--score-output-path-prefixes"): { "nargs": '+', "help": "A (space-separated) list of variant score file paths prefixes (each for a different fold) to be summarized together, used in the `score` subcommand. Used like so: `--score-output-paths /projects/score/adipocytes/fold_0/ /projects/score/adipocytes/fold_1/ /projects/score/adipocytes/fold_2/ ...`."},
-			("-ss", "--scores-suffix"): {"type": str, "help": "The score file path suffix applied after the output prefix.", 'default': 'variant_scores.tsv'},
+			("-sf", "--score-filename"): {"type": str, "help": "The output score filename to use after the output prefix.", 'default': 'variant_scores.tsv'},
 			("-o", "--summarize-output-path"): { "type": str, "help": 'A string representing the output file path of the `summarize` subcommand. Should contain information relevant to the project, subcommand, and model. Example usage: `--summarize-output-path /projects/summarize/adipocytes/mean.variant_scores.tsv` will output to /projects/summarize/adipocytes/mean.variant_scores.tsv.'},
 			("-im", "--input-metadata"): {"type": str, "help": f'A TSV file containing at least these columns for this subcommand: "{SCORE_OUT_PATH_PREFIX_COL}", "{SUMMARIZE_OUT_PATH_COL}", and (optionally) {SPLIT_PER_CHROMOSOME_COL} (with values True or False).'},
 			("-sc", "--schema"): { "type": str, "choices": ['bed', 'plink', 'plink2', 'chrombpnet', 'original'], "default": 'chrombpnet', "help": "Format for the input variants list."},

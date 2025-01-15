@@ -27,7 +27,7 @@ def summarize(metadata_split, args, partition_index, process_index):
         summarize_out = summarize_out_tuple[0]
         score_out_path_prefixes = group[SCORE_OUT_PATH_PREFIX_COL]
         for score_out_path_prefix in score_out_path_prefixes:
-            scores_file = get_score_file_path(score_out_path_prefix, args.scores_suffix, chr='all')
+            scores_file = get_score_file_path(score_out_path_prefix, args.score_filename, chr='all')
             if not os.path.isfile(scores_file):
                 missing_scores.add(scores_file)
                 logging.debug(f'Missing scores file: {scores_file}')
@@ -83,7 +83,7 @@ def summarize(metadata_split, args, partition_index, process_index):
                 # Concatenate TSV files based on the prefix and suffixes for chromosomes
                 partial_scores = []
                 for suffix in chromosome_suffixes:
-                    variant_score_file = get_score_file_path(score_out_path_prefix, args.scores_suffix, chr=suffix)
+                    variant_score_file = get_score_file_path(score_out_path_prefix, args.score_filename, chr=suffix)
                     if os.path.isfile(variant_score_file):
                         read_start_time = time.time()
                         # variant_scores = pd.read_csv(variant_score_file, usecols=columns_to_access, sep='\t')
@@ -102,7 +102,7 @@ def summarize(metadata_split, args, partition_index, process_index):
             else:
                 # If not split per chromosome, just read the original file
                 variant_score_file = f"{score_out_path_prefix}variant_scores.from_nautilus.tsv"
-                variant_score_file = get_score_file_path(score_out_path_prefix, args.scores_suffix, chr='all')
+                variant_score_file = get_score_file_path(score_out_path_prefix, args.score_filename, chr='all')
 
                 read_start_time = time.time()
                 logging.debug(f"Reading {variant_score_file}")

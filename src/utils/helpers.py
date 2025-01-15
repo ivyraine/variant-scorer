@@ -480,20 +480,24 @@ def get_score_dir(score_out_prefix):
     return os.path.dirname(score_out_prefix)
 
 def get_score_file_path(score_out_prefix, file_suffix, chr='all'):
+    if "/" in file_suffix:
+        raise ValueError("File suffix cannot contain be a path. It should be a filename.")
     if chr is None or chr == 'all':
-        return f"{score_out_prefix}{file_suffix}"
+        return os.path.join(score_out_prefix, file_suffix)
     else:
         return f"{score_out_prefix}.{str(chr)}.{file_suffix}"
     
 def get_score_peaks_path(score_out_prefix):
-    return f"{score_out_prefix}peak_scores.tsv"
+    return os.path.join(score_out_prefix, "peak_scores.tsv")
 
 def get_score_shuffled_path(score_out_prefix):
-    return f"{score_out_prefix}variant_scores.shuffled.tsv"
+    return os.path.join(score_out_prefix, "variant_scores.shuffled.tsv")
 
 def get_profiles_file_path(score_out_prefix, file_suffix, chr='all'):
+    if "/" in file_suffix:
+        raise ValueError("File suffix cannot contain be a path. It should be a filename.")
     if chr is None or chr == 'all':
-        return f"{score_out_prefix}{file_suffix}"
+        return os.path.join(score_out_prefix, file_suffix)
     else:
         return f"{score_out_prefix}.{str(chr)}.{file_suffix}"
 
