@@ -1,6 +1,6 @@
 [project]
 name = "varscore"
-requires-python = "==3.8.20"
+requires-python = "==3.9.12"
 version = "0.0.1"
 authors = [
 	{ name = "Soumya Kundu", email = "soumyak@stanford.edu" },

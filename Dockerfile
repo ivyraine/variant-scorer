@@ -15,6 +15,7 @@ RUN pip install gcsfs
 RUN pip install --upgrade protobuf==3.20.0
 
 COPY . /scratch/variant-scorer
+RUN pip install -e ./variant-scorer
 
 # Make the script executable.
 # RUN chmod +x /scratch/variant-scorer/src/variant_scoring.per_chrom.py
