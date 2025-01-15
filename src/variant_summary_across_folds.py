@@ -171,11 +171,13 @@ def main(args = None):
             raise ValueError(f"Duplicate entries found for {SUMMARIZE_OUT_PATH_COL} and {SCORE_OUT_PATH_PREFIX_COL} combination:\n{duplicates}\nRemove the duplicates and try again.")
     elif args.score_output_path_prefixes and args.summarize_output_path:
         # Create a DataFrame with the score_output_path_prefixes
-        metadata = pl.DataFrame({
+        df_data = {
             SCORE_OUT_PATH_PREFIX_COL: args.score_output_path_prefixes,
             SUMMARIZE_OUT_PATH_COL: [args.summarize_output_path] * len(args.score_output_path_prefixes),
-            SPLIT_PER_CHROMOSOME_COL: [args.split_per_chromosome] * len(args.score_output_path_prefixes)
-        })
+        }
+        if args.split_per_chromosome:
+            df_data[SPLIT_PER_CHROMOSOME_COL] = [args.split_per_chromosome] * len(args.score_output_path_prefixes)
+        metadata = pl.DataFrame(df_data)
     
     def get_n_metadata_partitions(metadata, n):
         partitions = [pl.DataFrame() for _ in range(n)]
